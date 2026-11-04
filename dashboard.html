@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nebulizaci&#243;n espacial 2026 | Sistema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+<body>
+
+<!-- Ingreso -->
+<section id="pantallaLogin" class="login">
+  <form id="formLogin" class="login-caja">
+    <img src="logo.png" alt="" onerror="this.style.display='none'">
+    <h1>Nebulizaci&#243;n espacial</h1>
+    <label for="clave">Contrase&#241;a</label>
+    <input type="password" id="clave" autocomplete="current-password" required>
+    <button type="submit" class="btn btn-primario">Ingresar</button>
+    <p id="loginError" class="error" role="alert"></p>
+    <a href="index.html" class="volver">Volver a la portada</a>
+  </form>
+</section>
+
+<!-- Sistema -->
+<div id="app" hidden>
+  <header class="barra">
+    <a href="index.html" class="barra-marca"><img src="logo.png" alt="" onerror="this.style.display='none'">Nebulizaci&#243;n espacial 2026</a>
+    <nav class="pestanas" role="tablist">
+      <button class="pestana activa" data-vista="panel" role="tab">Panel</button>
+      <button class="pestana" data-vista="registros" role="tab">Registros</button>
+      <button class="pestana" data-vista="formulario" role="tab" id="tabForm">Nuevo registro</button>
+    </nav>
+    <button id="btnSalir" class="btn btn-claro">Salir</button>
+  </header>
+
+  <!-- PANEL -->
+  <main id="vista-panel" class="vista">
+    <section class="filtros">
+      <div><label for="fDesde">Desde</label><input type="date" id="fDesde"></div>
+      <div><label for="fHasta">Hasta</label><input type="date" id="fHasta"></div>
+      <div><label for="fMes">Mes</label><select id="fMes"></select></div>
+      <div><label for="fDistrito">Distrito</label><select id="fDistrito"></select></div>
+      <div><label for="fEess">Establecimiento</label><select id="fEess"></select></div>
+      <div><label for="fVuelta">Vuelta</label><select id="fVuelta"></select></div>
+      <div class="filtros-botones">
+        <button id="btnLimpiar" class="btn btn-claro">Limpiar filtros</button>
+        <button id="btnExportar" class="btn btn-primario">Descargar consolidado</button>
+      </div>
+    </section>
+
+    <section class="indicadores" id="tarjetas"></section>
+
+    <section class="graficos">
+      <article class="grafico ancho">
+        <h2>Viviendas programadas y nebulizadas por mes</h2>
+        <div class="lienzo"><canvas id="gMes"></canvas></div>
+      </article>
+      <article class="grafico">
+        <h2>Condici&#243;n de las viviendas programadas</h2>
+        <div class="lienzo"><canvas id="gCondicion"></canvas></div>
+      </article>
+      <article class="grafico">
+        <h2>Cobertura de nebulizaci&#243;n por establecimiento</h2>
+        <div class="lienzo alto"><canvas id="gEess"></canvas></div>
+      </article>
+    </section>
+
+    <section class="bloque">
+      <div class="bloque-cab">
+        <h2>Consolidado por mes, establecimiento y vuelta</h2>
+        <span class="nota">Coberturas calculadas sobre los totales (no suma de porcentajes)</span>
+      </div>
+      <div class="tabla-envoltura"><table id="tablaConsolidado"></table></div>
+    </section>
+  </main>
+
+  <!-- REGISTROS -->
+  <main id="vista-registros" class="vista" hidden>
+    <section class="bloque">
+      <div class="bloque-cab">
+        <h2>Registros de intervenci&#243;n</h2>
+        <div class="acciones">
+          <input type="search" id="buscar" placeholder="Buscar establecimiento, zona, distrito...">
+          <label class="check"><input type="checkbox" id="soloRevisar"> Solo por revisar</label>
+          <label class="btn btn-claro" for="archivoImport">Importar Excel</label>
+          <input type="file" id="archivoImport" accept=".xlsx,.xls" hidden>
+          <button class="btn btn-primario" id="btnNuevo2">Nuevo registro</button>
+        </div>
+      </div>
+      <p class="nota" id="resumenRegistros"></p>
+      <div class="tabla-envoltura"><table id="tablaRegistros"></table></div>
+    </section>
+  </main>
+
+  <!-- FORMULARIO -->
+  <main id="vista-formulario" class="vista" hidden>
+    <form id="formReg" class="bloque formulario" novalidate>
+      <div class="bloque-cab">
+        <h2 id="tituloForm">Nuevo registro de nebulizaci&#243;n</h2>
+        <span class="nota" id="idEdicion"></span>
+      </div>
+
+      <fieldset>
+        <legend>Lugar de intervenci&#243;n</legend>
+        <div class="rejilla">
+          <div><label for="PROVINCIA">Provincia</label><input id="PROVINCIA" list="lProvincia" required></div>
+          <div><label for="DISTRITO">Distrito</label><input id="DISTRITO" list="lDistrito" required></div>
+          <div><label for="UNGETS">UNGETS</label><input id="UNGETS" list="lUngets" required></div>
+          <div class="doble"><label for="ESTABLECIMIENTO">Establecimiento de salud</label><input id="ESTABLECIMIENTO" list="lEess" required></div>
+          <div class="doble"><label for="ZONA">Zona, sector, manzanas u otra descripci&#243;n</label><input id="ZONA" placeholder="Ej. CERCO 2 - SECTOR III, OVITRAMPA 13"></div>
+          <div><label for="VUELTA">Vuelta</label>
+            <select id="VUELTA" required><option value="">Elegir</option><option>I</option><option>II</option><option>III</option><option>IV</option></select></div>
+          <div><label for="FECHA_INICIO">Fecha de intervenci&#243;n (d&#237;a)</label><input type="date" id="FECHA_INICIO" required></div>
+          <div id="cajaTermino" hidden><label for="FECHA_TERMINO">Fecha de t&#233;rmino</label><input type="date" id="FECHA_TERMINO" required></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Viviendas</legend>
+        <div class="rejilla">
+          <div><label for="VIV_PRO">Programadas</label><input type="number" min="0" id="VIV_PRO" class="n" required></div>
+          <div><label for="VIV_NEB">Nebulizadas</label><input type="number" min="0" id="VIV_NEB" class="n"></div>
+          <div><label for="VIV_CER">Cerradas</label><input type="number" min="0" id="VIV_CER" class="n"></div>
+          <div><label for="VIV_REN">Renuentes</label><input type="number" min="0" id="VIV_REN" class="n"></div>
+          <div><label for="VIV_DESH">Deshabitadas</label><input type="number" min="0" id="VIV_DESH" class="n"></div>
+        </div>
+        <div class="calculos" id="calcViv" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Manzanas y equipos</legend>
+        <div class="rejilla">
+          <div><label for="MZ_PRO">Manzanas programadas</label><input type="number" min="0" id="MZ_PRO" class="n"></div>
+          <div><label for="MZ_NEB">Manzanas nebulizadas</label><input type="number" min="0" id="MZ_NEB" class="n"></div>
+          <div><label for="EQ_PORT_FRIO">Port&#225;til fr&#237;o</label><input type="number" min="0" id="EQ_PORT_FRIO" class="n"></div>
+          <div><label for="EQ_PORT_CALIENTE">Port&#225;til caliente</label><input type="number" min="0" id="EQ_PORT_CALIENTE" class="n"></div>
+          <div><label for="EQ_PESADO_FRIO">Pesado fr&#237;o</label><input type="number" min="0" id="EQ_PESADO_FRIO" class="n"></div>
+          <div><label for="EQ_PESADO_CALIENTE">Pesado caliente</label><input type="number" min="0" id="EQ_PESADO_CALIENTE" class="n"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Gasto <span class="nota">se calcula con las viviendas programadas; puedes corregirlo</span></legend>
+        <div class="rejilla">
+          <div><label for="INSECTICIDA_ML">Insecticida (ml)</label><input type="number" step="0.01" min="0" id="INSECTICIDA_ML" class="n gasto"></div>
+          <div><label for="INSECTICIDA_L">Insecticida (litros)</label><input type="number" step="0.01" min="0" id="INSECTICIDA_L" class="n gasto"></div>
+          <div><label for="PETROLEO_GAL">Petr&#243;leo (galones)</label><input type="number" step="0.00001" min="0" id="PETROLEO_GAL" class="n gasto"></div>
+          <div><label for="GASOLINA_GAL">Gasolina (galones)</label><input type="number" step="0.000001" min="0" id="GASOLINA_GAL" class="n gasto"></div>
+          <div class="boton-calc"><button type="button" id="btnRecalcGasto" class="btn btn-claro">Recalcular gasto</button></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Observaciones</legend>
+        <textarea id="OBSERVACIONES" rows="3"></textarea>
+      </fieldset>
+
+      <p id="formError" class="error" role="alert"></p>
+      <div class="form-botones">
+        <button type="button" id="btnCancelar" class="btn btn-claro">Cancelar</button>
+        <button type="submit" id="btnGuardar" class="btn btn-primario">Guardar registro</button>
+      </div>
+    </form>
+  </main>
+
+  <datalist id="lProvincia"></datalist><datalist id="lDistrito"></datalist>
+  <datalist id="lUngets"></datalist><datalist id="lEess"></datalist>
+</div>
+
+<div id="aviso" class="aviso" role="status" hidden></div>
+<div id="cargando" class="cargando" hidden><span></span></div>
+
+<script src="script.js"></script>
+</body>
+</html>

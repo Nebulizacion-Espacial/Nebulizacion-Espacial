@@ -1,0 +1,116 @@
+:root{
+  --selva:#14352a; --hoja:#2f7d4f; --hoja-clara:#dcebe1; --niebla:#eef3f0;
+  --ambar:#e0a526; --ambar-claro:#fff4d6; --rojo:#b23b2e; --tinta:#1d2a24;
+  --gris:#5d6b64; --borde:#cfdad3; --blanco:#ffffff;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Source Sans 3",Segoe UI,Arial,sans-serif;font-size:15px;color:var(--tinta);background:var(--niebla)}
+h1,h2{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-weight:600;margin:0}
+h2{font-size:21px}
+button,input,select,textarea{font:inherit}
+:focus-visible{outline:3px solid var(--ambar);outline-offset:2px}
+[hidden]{display:none !important}
+
+/* Botones */
+.btn{border:0;border-radius:6px;padding:9px 16px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+.btn-primario{background:var(--hoja);color:#fff}
+.btn-primario:hover{background:#286b43}
+.btn-claro{background:var(--blanco);color:var(--selva);border:1px solid var(--borde)}
+.btn-claro:hover{background:var(--hoja-clara)}
+.btn-mini{padding:4px 10px;font-size:13px}
+.btn-peligro{background:#fff;color:var(--rojo);border:1px solid #e3b5af}
+.btn-peligro:hover{background:#fbe9e7}
+
+/* Login */
+.login{min-height:100vh;display:grid;place-items:center;padding:20px;
+  background:linear-gradient(180deg,rgba(20,53,42,.65),rgba(20,53,42,.95)),url("selva.jpg") center/cover}
+.login-caja{background:#fff;padding:34px 30px;border-radius:10px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px}
+.login-caja img{height:56px;align-self:flex-start}
+.login-caja h1{font-size:34px;color:var(--selva);margin-bottom:10px}
+.login-caja input{padding:10px 12px;border:1px solid var(--borde);border-radius:6px}
+.login-caja .btn{margin-top:6px;padding:11px}
+.volver{color:var(--gris);font-size:14px}
+.error{color:var(--rojo);min-height:1.2em;margin:4px 0;font-weight:600}
+
+/* Barra */
+.barra{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:18px;padding:10px clamp(14px,3vw,32px);background:var(--selva);color:#fff}
+.barra-marca{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:22px;font-weight:600;white-space:nowrap}
+.barra-marca img{height:34px}
+.pestanas{display:flex;gap:4px;flex:1;overflow-x:auto}
+.pestana{background:transparent;color:#cfe3d6;border:0;padding:9px 14px;border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap}
+.pestana:hover{background:rgba(255,255,255,.08);color:#fff}
+.pestana.activa{background:var(--niebla);color:var(--selva)}
+
+.vista{padding:20px clamp(14px,3vw,32px) 40px;max-width:1440px;margin:0 auto}
+
+/* Filtros */
+.filtros{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;background:#fff;border:1px solid var(--borde);border-radius:8px;padding:14px 16px;margin-bottom:18px}
+.filtros>div{display:flex;flex-direction:column;gap:4px;min-width:130px}
+.filtros label,.formulario label{font-size:13px;color:var(--gris);font-weight:600}
+.filtros input,.filtros select{padding:7px 9px;border:1px solid var(--borde);border-radius:6px;background:#fff}
+.filtros-botones{flex-direction:row !important;gap:8px !important;margin-left:auto}
+
+/* Indicadores */
+.indicadores{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
+.tarjeta{background:#fff;border-left:5px solid var(--hoja);border-radius:6px;padding:14px 16px}
+.tarjeta .valor{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:38px;font-weight:700;line-height:1;color:var(--selva)}
+.tarjeta .etiqueta{font-size:14px;color:var(--gris);margin-top:6px}
+.tarjeta .detalle{font-size:13px;color:var(--gris);margin-top:2px}
+.tarjeta.destacada{background:var(--selva);border-left-color:var(--ambar)}
+.tarjeta.destacada .valor{color:#fff;font-size:46px}
+.tarjeta.destacada .etiqueta,.tarjeta.destacada .detalle{color:#cfe3d6}
+
+/* Graficos */
+.graficos{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+.grafico{background:#fff;border:1px solid var(--borde);border-radius:8px;padding:14px 16px}
+.grafico.ancho{grid-column:1/-1}
+.grafico h2{margin-bottom:10px;color:var(--selva)}
+.lienzo{position:relative;height:280px}
+.lienzo.alto{height:360px}
+@media (max-width:900px){.graficos{grid-template-columns:1fr}}
+
+/* Bloques y tablas */
+.bloque{background:#fff;border:1px solid var(--borde);border-radius:8px;padding:14px 16px;margin-bottom:18px}
+.bloque-cab{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.bloque-cab h2{color:var(--selva)}
+.acciones{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.acciones input[type=search]{padding:8px 10px;border:1px solid var(--borde);border-radius:6px;min-width:260px}
+.check{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--gris)}
+.nota{font-size:13px;color:var(--gris);font-weight:400}
+.tabla-envoltura{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{background:var(--hoja-clara);color:var(--selva);text-align:left;font-weight:700;padding:8px;white-space:nowrap;position:sticky;top:0}
+td{padding:7px 8px;border-bottom:1px solid #e6ece8;vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.revisar td{background:var(--ambar-claro)}
+tr.total td{font-weight:700;background:var(--niebla);border-top:2px solid var(--borde)}
+.marca-rev{display:inline-block;background:var(--ambar);color:var(--tinta);font-size:12px;font-weight:700;border-radius:4px;padding:1px 6px;cursor:help}
+.cob{display:inline-block;min-width:52px;text-align:right;font-weight:700}
+.cob.baja{color:var(--rojo)}
+.cob.media{color:#9a6b07}
+.cob.alta{color:var(--hoja)}
+.celda-acc{white-space:nowrap;display:flex;gap:6px}
+
+/* Formulario */
+.formulario fieldset{border:1px solid var(--borde);border-radius:8px;padding:12px 14px 14px;margin:0 0 14px}
+.formulario legend{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:18px;font-weight:600;color:var(--selva);padding:0 6px}
+.rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.rejilla>div{display:flex;flex-direction:column;gap:4px}
+.rejilla .doble{grid-column:span 2}
+@media (max-width:520px){.rejilla .doble{grid-column:span 1}}
+.formulario input,.formulario select,.formulario textarea{padding:8px 10px;border:1px solid var(--borde);border-radius:6px;background:#fff;width:100%}
+.formulario input.invalido{border-color:var(--rojo);background:#fdf1ef}
+.boton-calc{justify-content:flex-end}
+.calculos{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:12px;padding:10px 12px;background:var(--niebla);border-radius:6px;font-size:14px}
+.calculos b{font-variant-numeric:tabular-nums}
+.calculos .mal{color:var(--rojo);font-weight:700}
+.form-botones{display:flex;justify-content:flex-end;gap:10px}
+
+/* Aviso y carga */
+.aviso{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--selva);color:#fff;padding:12px 20px;border-radius:8px;z-index:50;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.aviso.error-aviso{background:var(--rojo)}
+.cargando{position:fixed;inset:0;background:rgba(238,243,240,.6);display:grid;place-items:center;z-index:40}
+.cargando span{width:42px;height:42px;border-radius:50%;border:4px solid var(--hoja-clara);border-top-color:var(--hoja);animation:gira 1s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.cargando span{animation-duration:3s}}
+@media (max-width:760px){.barra{flex-wrap:wrap}.pestanas{order:3;flex-basis:100%}}

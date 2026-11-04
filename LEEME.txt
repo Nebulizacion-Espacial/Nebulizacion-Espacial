@@ -1,0 +1,35 @@
+SISTEMA DE NEBULIZACION ESPACIAL 2026
+======================================
+
+ARCHIVOS
+  index.html, dashboard.html, script.js, style.css, presentacion.css -> pagina web
+  Codigo.gs  -> backend (Google Apps Script)
+  Copia en la misma carpeta las imagenes del dashboard de dengue: logo.png, mosquito.png, selva.jpg
+
+1. CREAR LA BASE (una sola vez)
+  a) En Google Drive crea una hoja de calculo nueva: "BD Nebulizacion Espacial".
+  b) Extensiones > Apps Script. Borra lo que haya, pega todo Codigo.gs y guarda.
+  c) Elige la funcion "instalar" y pulsa Ejecutar (acepta los permisos).
+     Se crean las hojas REGISTROS y CONFIG.
+  d) En la hoja CONFIG cambia la CLAVE (contrasena por defecto: nebulizacion2026).
+     Ahi tambien estan las tasas de gasto por vivienda programada.
+  e) Implementar > Nueva implementacion > tipo Aplicacion web
+     Ejecutar como: Yo  |  Quien tiene acceso: Cualquier usuario
+     Copia la URL que termina en /exec.
+
+2. CONECTAR LA PAGINA
+  En script.js, linea API_URL, pega la URL /exec entre las comillas.
+  (Si algun dia reemplazas script.js, vuelve a pegar la URL.)
+
+3. CARGAR EL HISTORICO ENERO-SETIEMBRE
+  Abre dashboard.html, entra con la clave, pestana Registros > Importar Excel
+  y elige Nebulizacion_historico_2026.xlsx. Si lo importas dos veces no se duplica.
+
+4. USO MENSUAL
+  Con cada reporte del jefe de nebulizacion: Nuevo registro, llenas y Guardar.
+  Para el reporte: Panel, filtra el mes y pulsa Descargar consolidado
+  (sale en el mismo formato de columnas del consolidado mensual).
+
+SI CAMBIAS Codigo.gs
+  Pegalo en Apps Script, ejecuta "instalar" y en Implementar > Administrar
+  implementaciones > editar > Nueva version. La URL no cambia.
