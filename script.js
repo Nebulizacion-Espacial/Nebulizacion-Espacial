@@ -17,7 +17,7 @@ var DIAS_CORTE = 7;
 var TASAS_DEFECTO = { ML_INSECTICIDA_POR_VIV: 5.26, GAL_PETROLEO_POR_VIV: 0.02642, GAL_GASOLINA_POR_VIV: 0.021136 };
 var COLORES = { neb: '#2f7d4f', cer: '#e0a526', ren: '#b23b2e', desh: '#8a9a92', novis: '#cfdad3', pro: '#14352a' };
 
-var ESTADO = { token: null, registros: [], cfg: {}, charts: {}, editandoId: null, gastoManual: false };
+var ESTADO = { token: null, registros: [], cfg: {}, charts: {}, editandoId: null, gastoManual: false, proManual: false, mzManual: false, vueltas: [] };
 
 function $(id) { return document.getElementById(id); }
 function n(v) { var x = Number(v); return isFinite(x) ? x : 0; }
@@ -89,7 +89,15 @@ function calc(r) {
     pMz: pct(n(r.MZ_NEB), n(r.MZ_PRO)) };
 }
 
-function clave(r) { return [r.PROVINCIA, r.DISTRITO, r.UNGETS, r.ESTABLECIMIENTO, r.ZONA, r.VUELTA].join('|'); }
+function normTxt(s) { return String(s === null || s === undefined ? '' : s).trim().toUpperCase().replace(/\s+/g, ' '); }
+/* Sector = misma localidad y zona (sin la vuelta); clave = sector + vuelta */
+function claveSector(r) { return [r.DISTRITO, r.ESTABLECIMIENTO, r.ZONA].map(normTxt).join('|'); }
+function clave(r) { return claveSector(r) + '|' + normTxt(r.VUELTA); }
+var ORDEN_VUELTA = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+var VUELTAS_META = 3; // se espera que cada sector tenga 3 vueltas
+function ordV(v) { var i = ORDEN_VUELTA.indexOf(normTxt(v)); return i < 0 ? 99 : i; }
+function hoyISO() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function noRealizada(r) { return normTxt(r.TIPO) === 'NO_REALIZADA'; }
 function esHistorico(r) { return r.CREADO === 'importado'; }
 function diasEntre(a, b) { return (new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000; }
 function mismoDia(r) {
@@ -99,6 +107,7 @@ function mismoDia(r) {
 }
 
 function alertas(r) {
+  if (noRealizada(r)) return [];
   var a = [], c = calc(r);
   if (c.vis > c.pro) a.push('Nebulizadas + cerradas + renuentes + deshabitadas (' + c.vis + ') superan las programadas (' + c.pro + ')');
   if (!r.VUELTA) a.push('Falta la vuelta');
@@ -110,16 +119,23 @@ function alertas(r) {
 }
 
 /* Une los registros diarios de la misma zona y vuelta en una sola intervenci\u00f3n:
-   suma viviendas, manzanas y gasto; inicio = primer d\u00eda, t\u00e9rmino = \u00faltimo d\u00eda.
+   suma nebulizadas, cerradas, renuentes, deshabitadas y gasto (las programadas no se duplican); inicio = primer d\u00eda, t\u00e9rmino = \u00faltimo d\u00eda.
    Los registros del hist\u00f3rico ya vienen consolidados y no se unen. */
 function consolidar(lista) {
-  var orden = lista.slice().sort(function (a, b) { return (a.FECHA_INICIO || '').localeCompare(b.FECHA_INICIO || ''); });
+  var orden = lista.filter(function (r) { return !noRealizada(r); }).sort(function (a, b) { return (a.FECHA_INICIO || '').localeCompare(b.FECHA_INICIO || ''); });
   var grupos = [], abiertos = {};
   orden.forEach(function (r) {
     var k = esHistorico(r) ? 'H|' + r.ID : clave(r);
     var g = abiertos[k];
     if (g && r.FECHA_INICIO && g.FECHA_TERMINO && diasEntre(g.FECHA_TERMINO, r.FECHA_INICIO) <= DIAS_CORTE) {
+      // Programadas: cada d\u00eda siguiente trae las pendientes; el total del sector es
+      // lo programado ese d\u00eda + lo ya visitado antes (se toma el mayor). As\u00ed no se duplican.
+      var cr = calc(r);
+      g.VIV_PRO = Math.max(n(g.VIV_PRO), n(r.VIV_PRO) + g.VIS_ACUM); g.VIS_ACUM += cr.vis;
+      if (r.MZ_PRO !== null && r.MZ_PRO !== '' && r.MZ_PRO !== undefined) g.MZ_PRO = Math.max(n(g.MZ_PRO), n(r.MZ_PRO) + g.MZN_ACUM);
+      g.MZN_ACUM += n(r.MZ_NEB);
       NUMERICOS.forEach(function (c) {
+        if (c === 'VIV_PRO' || c === 'MZ_PRO') return;
         if (r[c] === null || r[c] === '' || r[c] === undefined) return;
         // Los equipos no se suman: se toma el mayor numero usado en un dia
         g[c] = c.indexOf('EQ_') === 0 ? Math.max(n(g[c]), n(r[c])) : n(g[c]) + n(r[c]);
@@ -128,7 +144,7 @@ function consolidar(lista) {
       if (r.OBSERVACIONES && g.OBSERVACIONES.indexOf(r.OBSERVACIONES) < 0) g.OBSERVACIONES += (g.OBSERVACIONES ? '; ' : '') + r.OBSERVACIONES;
       g.DIAS++; g.IDS.push(r.ID);
     } else {
-      g = Object.assign({}, r, { DIAS: 1, IDS: [r.ID], OBSERVACIONES: r.OBSERVACIONES || '' });
+      g = Object.assign({}, r, { DIAS: 1, IDS: [r.ID], OBSERVACIONES: r.OBSERVACIONES || '', VIS_ACUM: calc(r).vis, MZN_ACUM: n(r.MZ_NEB) });
       abiertos[k] = g; grupos.push(g);
     }
   });
@@ -201,7 +217,7 @@ function dibujarPanel() {
     tarjeta(fmt(t.neb), 'Viviendas nebulizadas', fmt(t.vis) + ' visitadas') +
     tarjeta(fmt(t.cer + t.ren), 'Cerradas y renuentes', fmt(t.cer) + ' cerradas, ' + fmt(t.ren) + ' renuentes') +
     tarjeta(fmt(t.lt), 'Insecticida (litros)', fmt(t.pet, 1) + ' gal petr\u00f3leo, ' + fmt(t.gas, 1) + ' gal gasolina');
-  graficoMes(lista); graficoCondicion(t); graficoEess(lista); tablaConsolidado(lista);
+  graficoMes(lista); graficoCondicion(t); graficoEess(lista); tablaConsolidado(lista); tablaVueltas(lista);
 }
 
 function tarjeta(valor, etiqueta, detalle, destacada) {
@@ -270,15 +286,215 @@ function tablaConsolidado(lista) {
   $('tablaConsolidado').innerHTML = cab + '<tbody>' + filas + tot + '</tbody>';
 }
 
+/* ---------- Control de vueltas por localidad y zona ---------- */
+/* Para cada sector (localidad + zona) mira todas sus vueltas en todos los registros:
+   realizada, en avance (faltan viviendas), no realizada (con motivo) o pendiente. */
+function estadoSectores(lista) {
+  var orden = [], vistos = {};
+  lista.forEach(function (g) {
+    var k = claveSector(g);
+    if (!vistos[k]) { vistos[k] = { k: k, muestra: g, ini: g.FECHA_INICIO || '' }; orden.push(vistos[k]); }
+    else if (g.FECHA_INICIO && (!vistos[k].ini || g.FECHA_INICIO < vistos[k].ini)) vistos[k].ini = g.FECHA_INICIO;
+  });
+  var todos = consolidar(ESTADO.registros), motivos = ESTADO.registros.filter(noRealizada);
+  return orden.map(function (s) {
+    var porV = {};
+    todos.forEach(function (g) { if (claveSector(g) === s.k) { var v = normTxt(g.VUELTA); (porV[v] = porV[v] || []).push(g); } });
+    var mot = {};
+    motivos.forEach(function (m) { if (claveSector(m) === s.k) mot[normTxt(m.VUELTA)] = m; });
+    var hechas = Object.keys(porV).map(ordV).filter(function (i) { return i < 99; });
+    var ultimaHecha = hechas.length ? Math.max.apply(null, hechas) : -1;
+    var maxI = Math.max.apply(null, [VUELTAS_META - 1, ultimaHecha].concat(Object.keys(mot).map(ordV).filter(function (i) { return i < 99; })));
+    var celdas = [], pro = 0, faltan = [];
+    for (var i = 0; i <= maxI; i++) {
+      var v = ORDEN_VUELTA[i], gs = porV[v];
+      if (gs) {
+        var t = agrupar(gs, function () { return 'T'; }).T;
+        pro = t.pro || pro;
+        var est = t.vis >= t.pro || i < ultimaHecha || !t.fin || diasEntre(t.fin, hoyISO()) > DIAS_CORTE ? 'ok' : 'avance';
+        celdas.push({ v: v, est: est, t: t });
+      } else if (mot[v]) celdas.push({ v: v, est: 'no', m: mot[v] });
+      else celdas.push({ v: v, est: 'pend' });
+    }
+    celdas.forEach(function (c) { if (c.est === 'pend') faltan.push(c.v); if (c.est === 'avance') faltan.push(c.v + ' (en avance)'); });
+    return { k: s.k, muestra: s.muestra, ini: s.ini, celdas: celdas, pro: pro, faltan: faltan };
+  });
+}
+
+function asegurarSeccionVueltas() {
+  if ($('tablaVueltas')) return true;
+  var t = $('tablaConsolidado'); if (!t) return false;
+  var cont = t, panel = $('vista-panel');
+  while (cont.parentElement && cont.parentElement !== panel) cont = cont.parentElement;
+  var sec = document.createElement(cont.tagName === 'TABLE' ? 'div' : cont.tagName);
+  sec.className = cont === t ? '' : cont.className;
+  var tit = cont.querySelector('h1,h2,h3,h4');
+  var tag = tit ? tit.tagName.toLowerCase() : 'h2';
+  var envoltura = t.parentElement !== cont && t.parentElement ? t.parentElement.className : '';
+  sec.innerHTML = '<' + tag + (tit && tit.className ? ' class="' + tit.className + '"' : '') + '>Control de vueltas por localidad y zona</' + tag + '>' +
+    '<p style="margin:2px 0 10px;font-size:.85rem;color:#4b5b53">Cada localidad + zona debe tener ' + VUELTAS_META + ' vueltas. Si una vuelta no se pudo hacer, registra el motivo y saldr\u00e1 as\u00ed en el consolidado.</p>' +
+    '<div class="' + envoltura + '" style="overflow-x:auto"><table id="tablaVueltas" class="' + (t.className || '') + '"></table></div>';
+  (cont === t ? t : cont).after(sec);
+  $('tablaVueltas').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.motivo) registrarMotivo(+b.dataset.motivo, b.dataset.v);
+    if (b.dataset.quitar) eliminarRegistro(b.dataset.quitar);
+  });
+  return true;
+}
+
+function tablaVueltas(lista) {
+  if (!asegurarSeccionVueltas()) return;
+  var ss = estadoSectores(lista).sort(function (a, b) { return (a.ini || '9').localeCompare(b.ini || '9') || a.k.localeCompare(b.k); });
+  ESTADO.vueltas = ss;
+  var nV = ss.reduce(function (m, s) { return Math.max(m, s.celdas.length); }, VUELTAS_META);
+  var cab = '<thead><tr><th>Distrito</th><th>Localidad (EESS)</th><th>Zona</th><th class="num">Programadas</th>';
+  for (var i = 0; i < nV; i++) cab += '<th style="text-align:center">Vuelta ' + ORDEN_VUELTA[i] + '</th>';
+  cab += '<th>Estado</th></tr></thead>';
+  var completos = 0;
+  var filas = ss.map(function (s, idx) {
+    var r = s.muestra, td = '';
+    for (var i = 0; i < nV; i++) {
+      var c = s.celdas[i];
+      if (!c) { td += '<td></td>'; continue; }
+      if (c.est === 'ok') td += '<td style="text-align:center;background:#e8f5ec">\u2705<br><small>' + fechaCorta(c.t.ini).slice(0, 5) + (c.t.fin && c.t.fin !== c.t.ini ? ' al ' + fechaCorta(c.t.fin).slice(0, 5) : '') + ' \u00b7 ' + fmtPct(pct(c.t.neb, c.t.pro)) + '</small></td>';
+      else if (c.est === 'avance') td += '<td style="text-align:center;background:#fff7e0">\u23f3 En avance<br><small>faltan ' + fmt(c.t.novis) + ' de ' + fmt(c.t.pro) + '</small></td>';
+      else if (c.est === 'no') td += '<td style="text-align:center;background:#fdecea">\u26a0\ufe0f No realizada<br><small title="' + esc(c.m.OBSERVACIONES) + '">' + esc(String(c.m.OBSERVACIONES || '').slice(0, 60)) + '</small><br><button class="btn btn-claro btn-mini" type="button" data-quitar="' + esc(c.m.ID) + '">Quitar motivo</button></td>';
+      else td += '<td style="text-align:center">Pendiente<br><button class="btn btn-claro btn-mini" type="button" data-motivo="' + idx + '" data-v="' + c.v + '">Registrar motivo</button></td>';
+    }
+    var ok = !s.faltan.length; if (ok) completos++;
+    return '<tr><td>' + esc(r.DISTRITO) + '</td><td>' + esc(r.ESTABLECIMIENTO) + '</td><td>' + esc(r.ZONA) + '</td><td class="num">' + fmt(s.pro) + '</td>' + td +
+      '<td>' + (ok ? '<b style="color:#2f7d4f">Completo</b>' : 'Falta: ' + esc(s.faltan.join(', '))) + '</td></tr>';
+  }).join('');
+  $('tablaVueltas').innerHTML = cab + '<tbody>' + (filas || '<tr><td colspan="' + (nV + 5) + '">No hay intervenciones con estos filtros.</td></tr>') +
+    (ss.length ? '<tr class="total"><td colspan="' + (nV + 5) + '">' + completos + ' de ' + ss.length + ' localidades/zonas con sus vueltas completas</td></tr>' : '') + '</tbody>';
+}
+
+async function registrarMotivo(idx, v) {
+  var s = ESTADO.vueltas[idx]; if (!s) return;
+  var r = s.muestra;
+  var motivo = prompt('Vuelta ' + v + ' de ' + r.ESTABLECIMIENTO + ' \u00b7 ' + (r.ZONA || 'sin zona') + '\n\n\u00bfPor qu\u00e9 no se realiz\u00f3 esta vuelta?');
+  if (motivo === null) return;
+  motivo = motivo.trim();
+  if (!motivo) { avisar('Escribe el motivo para registrarlo.', true); return; }
+  var o = { ID: '', TIPO: 'NO_REALIZADA', VUELTA: v, OBSERVACIONES: motivo, VIV_PRO: s.pro || '', FECHA_INICIO: '', FECHA_TERMINO: '' };
+  ['PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'ZONA'].forEach(function (c) { o[c] = r[c] || ''; });
+  NUMERICOS.forEach(function (c) { if (c !== 'VIV_PRO') o[c] = ''; });
+  cargando(true);
+  try {
+    var j = await api('guardar', { registro: o });
+    var nuevo = j.registro;
+    if (!noRealizada(nuevo)) throw new Error('El servidor no guard\u00f3 el tipo de registro. Actualiza Codigo.gs (ejecuta "instalar" y publica una nueva versi\u00f3n).');
+    NUMERICOS.forEach(function (c) { nuevo[c] = nuevo[c] === '' ? null : n(nuevo[c]); });
+    ESTADO.registros.push(nuevo);
+    refrescarTodo();
+    avisar('Motivo registrado: vuelta ' + v + ' no realizada.');
+  } catch (e) { avisar(e.message, true); }
+  cargando(false);
+}
+
+/* ---------- Avance de la vuelta en el formulario ---------- */
+function avanceVuelta(o) {
+  if (!o.ESTABLECIMIENTO || !o.VUELTA) return null;
+  var k = clave(o), ks = claveSector(o);
+  var otros = ESTADO.registros.filter(function (r) { return !noRealizada(r) && r.ID !== o.ID && claveSector(r) === ks; });
+  var g = null;
+  consolidar(otros.filter(function (r) { return clave(r) === k; })).forEach(function (x) {
+    if (!o.FECHA_INICIO || !x.FECHA_TERMINO) { g = x; return; }
+    var d = diasEntre(x.FECHA_TERMINO, o.FECHA_INICIO);
+    if (d <= DIAS_CORTE && d >= -DIAS_CORTE) g = x;
+  });
+  var prev = null, vi = ordV(o.VUELTA);
+  consolidar(otros).forEach(function (x) {
+    var i = ordV(x.VUELTA);
+    if (i < vi && (!prev || i > ordV(prev.VUELTA) || (i === ordV(prev.VUELTA) && x.FECHA_INICIO > prev.FECHA_INICIO))) prev = x;
+  });
+  if (prev) prev = Object.assign({}, prev, agrupar(consolidar(otros.filter(function (r) { return clave(r) === clave(prev); })), function () { return 'T'; }).T);
+  var sig = ORDEN_VUELTA[vi + 1] || null;
+  return { g: g, c: g ? calc(g) : null, mzPend: g ? n(g.MZ_PRO) - n(g.MZ_NEB) : 0, prev: prev, sig: sig };
+}
+
+function cajaAvance() {
+  var box = $('avisoVuelta');
+  if (box) return box;
+  var ref = $('VIV_PRO'); if (!ref) return null;
+  var fs = ref.closest('fieldset') || ref.parentElement;
+  box = document.createElement('div');
+  box.id = 'avisoVuelta'; box.hidden = true;
+  box.style.cssText = 'margin:0 0 14px;padding:10px 14px;border-radius:8px;font-size:.9rem;line-height:1.45;border:1px solid';
+  fs.parentElement.insertBefore(box, fs);
+  box.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.usar) { $('VIV_PRO').value = b.dataset.usar; ESTADO.proManual = false; if (!ESTADO.gastoManual) recalcularGasto(); actualizarCalculos(); }
+    if (b.dataset.vuelta) {
+      var sel = $('VUELTA');
+      if (![].some.call(sel.options || [], function (op) { return op.value === b.dataset.vuelta; }) && sel.tagName === 'SELECT') sel.add(new Option(b.dataset.vuelta, b.dataset.vuelta));
+      sel.value = b.dataset.vuelta; ESTADO.proManual = false; ESTADO.mzManual = false; revisarVuelta();
+    }
+  });
+  return box;
+}
+
+function revisarVuelta() {
+  var box = cajaAvance(); if (!box) return;
+  var o = leerFormulario(), a = avanceVuelta(o);
+  var nuevo = !ESTADO.editandoId, sugerido = null, sugMz = null, html = '', tono = 'info';
+  if (a && a.g) {
+    var c = a.c, dias = a.g.DIAS + ' d\u00eda' + (a.g.DIAS === 1 ? '' : 's') + ' (' + fechaCorta(a.g.FECHA_INICIO) + (a.g.FECHA_TERMINO !== a.g.FECHA_INICIO ? ' al ' + fechaCorta(a.g.FECHA_TERMINO) : '') + ')';
+    if (c.novis > 0) {
+      sugerido = c.novis; sugMz = a.mzPend > 0 ? a.mzPend : null;
+      html = '<b>Esta zona ya tiene avance en la vuelta ' + esc(normTxt(o.VUELTA)) + '</b>: ' + dias + ', ' + fmt(c.pro) + ' programadas y ' + fmt(c.vis) + ' visitadas (' + fmt(c.neb) + ' nebulizadas).<br>' +
+        '<b style="font-size:1.05rem">Pendientes: ' + fmt(c.novis) + ' viviendas</b>' + (sugMz ? ' \u00b7 ' + fmt(sugMz) + ' manzanas' : '') +
+        '. En el consolidado este d\u00eda se suma a la misma fila.' + (n($('VIV_PRO').value) === c.novis ? '' : ' <button class="btn btn-claro btn-mini" type="button" data-usar="' + c.novis + '">Usar ' + c.novis + ' como programadas</button>');
+    } else {
+      tono = 'ok';
+      html = '<b>La vuelta ' + esc(normTxt(o.VUELTA)) + ' de esta zona ya est\u00e1 completa</b>: ' + dias + ', ' + fmt(c.pro) + ' programadas y ' + fmt(c.vis) + ' visitadas.' +
+        (a.sig ? ' <button class="btn btn-claro btn-mini" type="button" data-vuelta="' + a.sig + '">Pasar a la vuelta ' + a.sig + '</button>' : '');
+    }
+  } else if (a && a.prev) {
+    sugerido = a.prev.pro || null; sugMz = n(a.prev.mzp) || null;
+    html = '<b>Vuelta ' + esc(normTxt(o.VUELTA)) + ' nueva en esta zona.</b> En la vuelta ' + esc(normTxt(a.prev.VUELTA)) + ' se programaron ' + fmt(a.prev.pro) + ' viviendas' + (sugMz ? ' y ' + fmt(sugMz) + ' manzanas' : '') + '; las vueltas llevan las mismas programadas.';
+  }
+  if (!html) { box.hidden = true; box.innerHTML = ''; return; }
+  var col = tono === 'ok' ? ['#e8f5ec', '#9fd1b0', '#14532d'] : ['#fff7e0', '#f0d48a', '#5c4300'];
+  box.style.background = col[0]; box.style.borderColor = col[1]; box.style.color = col[2];
+  box.innerHTML = html; box.hidden = false;
+  if (nuevo && sugerido !== null) {
+    if (!ESTADO.proManual) { $('VIV_PRO').value = sugerido; if (!ESTADO.gastoManual) recalcularGasto(); }
+    if (!ESTADO.mzManual && sugMz !== null && $('MZ_PRO')) $('MZ_PRO').value = sugMz;
+    actualizarCalculos();
+  }
+}
+
 /* ---------- Exportar consolidado (formato del Excel original) ---------- */
 async function exportar() {
   if (typeof ExcelJS === 'undefined') { avisar('No se pudo cargar la librer\u00eda de Excel. Revisa tu conexi\u00f3n.', true); return; }
-  var lista = filtrados().slice().sort(function (a, b) { return (a.FECHA_INICIO || '').localeCompare(b.FECHA_INICIO || ''); });
+  // Filas agrupadas por localidad + zona (en el orden en que se empez\u00f3), y dentro por vuelta I, II, III
+  var sect = {}, ordenS = [];
+  filtrados().forEach(function (g) {
+    var k = claveSector(g);
+    if (!sect[k]) { sect[k] = { ini: g.FECHA_INICIO || '9999', filas: [], vs: {} }; ordenS.push(k); }
+    sect[k].filas.push(g); sect[k].vs[normTxt(g.VUELTA)] = 1;
+    if (g.FECHA_INICIO && g.FECHA_INICIO < sect[k].ini) sect[k].ini = g.FECHA_INICIO;
+  });
+  var fV = $('fVuelta').value;
+  ESTADO.registros.filter(noRealizada).forEach(function (m) {
+    var s = sect[claveSector(m)], v = normTxt(m.VUELTA);
+    if (s && !s.vs[v] && (!fV || normTxt(fV) === v)) { s.filas.push(Object.assign({}, m, { NOREAL: true })); s.vs[v] = 1; }
+  });
+  ordenS.sort(function (a, b) { return sect[a].ini.localeCompare(sect[b].ini) || a.localeCompare(b); });
+  var lista = [], grupoDe = [];
+  ordenS.forEach(function (k, gi) {
+    sect[k].filas.sort(function (a, b) { return ordV(a.VUELTA) - ordV(b.VUELTA) || (a.FECHA_INICIO || '').localeCompare(b.FECHA_INICIO || ''); })
+      .forEach(function (r) { lista.push(r); grupoDe.push(gi); });
+  });
+  var PALETA = ['FFE6B8A2', 'FFBDD7EE', 'FFA9D08E', 'FFFFF2A8', 'FFFFC000', 'FFFCE4D6', 'FFD9A6C4', 'FFC6EFCE', 'FFDDEBF7', 'FFFFE699', 'FFD0CECE', 'FFF4B183'];
+  function limpiaObs(t) { return String(t || '').split('; ').filter(function (x) { return x && !/^REVISAR/.test(x); }).join('; '); }
   var wb = new ExcelJS.Workbook();
   var ws = wb.addWorksheet('Base de datos', { views: [{ state: 'frozen', ySplit: 5 }] });
-  var NC = 32;
+  var NC = 33;
   ws.pageSetup = { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '3:5' };
-  var ancho = [12, 16, 12, 24, 26, 4, 6, 6, 6, 6, 6, 6, 7, 8, 8, 8, 8, 8, 6, 6, 8, 9, 9, 9, 9, 10, 6, 7, 8, 11, 11, 11];
+  var ancho = [12, 16, 12, 24, 26, 4, 6, 6, 6, 6, 6, 6, 7, 8, 8, 8, 8, 8, 6, 6, 8, 9, 9, 9, 9, 10, 6, 7, 8, 11, 11, 11, 40];
   ancho.forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
 
   // Fila 1: t\u00edtulo
@@ -292,16 +508,16 @@ async function exportar() {
   var fila3 = ['Provincia', 'Distrito', 'UNGETS', 'Localidad (EESS)', 'ZONA - SECTOR - MZ - otra descripci\u00f3n', 'Vuelta',
     'Viviendas', '', '', '', '', '', 'Visitadas', 'Cobertura viv. nebulizadas', 'Cobertura viv. Cerradas', 'Cobertura viv. Renuentes',
     'Cobertura viv. Deshabitadas', 'Cobertura viv. No_visitadas', 'Manzanas', '', 'Cobertura mz. nebulizadas', 'N\u00famero de', '', '', '', '',
-    'Gasto de insecticida en litros', 'Gasto de petr\u00f3leo en galones', 'Gasto de gasolina en galones', 'Mes', 'Fecha de intervenci\u00f3n (inicio)', 'Fecha de intervenci\u00f3n (t\u00e9rmino)'];
+    'Gasto de insecticida en litros', 'Gasto de petr\u00f3leo en galones', 'Gasto de gasolina en galones', 'Mes', 'Fecha de intervenci\u00f3n (inicio)', 'Fecha de intervenci\u00f3n (t\u00e9rmino)', 'Observaciones'];
   var fila4 = ['', '', '', '', '', '', 'Programadas', 'Nebulizadas', 'Cerradas', 'Renuentes', 'Deshabitadas', 'No visitadas', '', '', '', '', '', '',
-    'Programadas', 'Nebulizadas', '', 'Equipo port\u00e1til frio', 'Equipo port\u00e1til caliente', 'Equipo pesado frio', 'Equipo pesado caliente', '', '', '', '', '', '', ''];
+    'Programadas', 'Nebulizadas', '', 'Equipo port\u00e1til frio', 'Equipo port\u00e1til caliente', 'Equipo pesado frio', 'Equipo pesado caliente', '', '', '', '', '', '', '', ''];
   var fila5 = ['Provincia', 'Distrito', 'UNGETS', 'Localidad', 'zonas', 'Vuelta', 'viv_pro', 'viv_neb', 'viv_cer', 'viv_ren', 'viv_desh', 'viv_no_vis',
     'visitadas', '% viv_neb', '% viv_cerr', '% viv_ren', '% viv_desh', '% viv_no_visitada', 'mz_pro', 'mz_neb', '% mz_neb',
-    'N\u00b0_eq_por_frio', 'N\u00b0_eq_por_cali', 'N\u00b0_eq_pesado_frio', 'N\u00b0_eq_pesado_cali', '', 'insec_litros', 'petr_galones', 'gasolina_galones', 'mes', 'inicio', 't\u00e9rmino'];
+    'N\u00b0_eq_por_frio', 'N\u00b0_eq_por_cali', 'N\u00b0_eq_pesado_frio', 'N\u00b0_eq_pesado_cali', '', 'insec_litros', 'petr_galones', 'gasolina_galones', 'mes', 'inicio', 't\u00e9rmino', 'observaciones'];
   ws.getRow(3).values = fila3; ws.getRow(4).values = fila4; ws.getRow(5).values = fila5;
   // Combinar: grupos en fila 3 y columnas simples en filas 3-4
   ws.mergeCells(3, 7, 3, 12); ws.mergeCells(3, 19, 3, 20); ws.mergeCells(3, 22, 3, 25);
-  [1, 2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 21, 26, 27, 28, 29, 30, 31, 32].forEach(function (c) { ws.mergeCells(3, c, 4, c); });
+  [1, 2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 21, 26, 27, 28, 29, 30, 31, 32, 33].forEach(function (c) { ws.mergeCells(3, c, 4, c); });
   var vertical = [6, 13, 14, 15, 16, 17, 18, 21, 27, 28, 29];
   var amarillo = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
   var borde = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
@@ -324,19 +540,22 @@ async function exportar() {
   lista.forEach(function (r, i) {
     var c = calc(r);
     var fila = ws.getRow(6 + i);
-    fila.values = [r.PROVINCIA, r.DISTRITO, r.UNGETS, r.ESTABLECIMIENTO, r.ZONA, r.VUELTA, c.pro, c.neb, c.cer, c.ren, c.desh, c.novis, c.vis,
+    if (r.NOREAL) fila.values = [r.PROVINCIA, r.DISTRITO, r.UNGETS, r.ESTABLECIMIENTO, r.ZONA, r.VUELTA, v(r.VIV_PRO)].concat(new Array(25).fill(null), ['VUELTA NO REALIZADA: ' + (r.OBSERVACIONES || '')]);
+    else fila.values = [r.PROVINCIA, r.DISTRITO, r.UNGETS, r.ESTABLECIMIENTO, r.ZONA, r.VUELTA, c.pro, c.neb, c.cer, c.ren, c.desh, c.novis, c.vis,
       c.pNeb, c.pCer, c.pRen, c.pDesh, c.pNovis, v(r.MZ_PRO), v(r.MZ_NEB), c.pMz === null ? null : c.pMz * 100,
       eq(r.EQ_PORT_FRIO), eq(r.EQ_PORT_CALIENTE), eq(r.EQ_PESADO_FRIO), eq(r.EQ_PESADO_CALIENTE),
       v(r.INSECTICIDA_ML), v(r.INSECTICIDA_L), v(r.PETROLEO_GAL), v(r.GASOLINA_GAL), (MESES[mesDe(r.FECHA_INICIO)] || '').toUpperCase(),
-      fecha(r.FECHA_INICIO), fecha(r.FECHA_TERMINO)];
+      fecha(r.FECHA_INICIO), fecha(r.FECHA_TERMINO), limpiaObs(r.OBSERVACIONES) || null];
     for (var col = 1; col <= NC; col++) {
       var cel = fila.getCell(col);
-      cel.border = borde; cel.font = { name: 'Arial', size: 9 };
+      cel.border = borde; cel.font = { name: 'Arial', size: 9, color: r.NOREAL ? { argb: 'FF9C0006' } : undefined, italic: !!r.NOREAL };
+      cel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: PALETA[grupoDe[i] % PALETA.length] } };
       cel.alignment = { horizontal: col <= 5 ? 'left' : col === 6 || col === 30 ? 'center' : col >= 31 ? 'center' : 'right', vertical: 'middle' };
       if (col >= 14 && col <= 18) cel.numFmt = '0.00%';
       if (col === 21 || col === 26) cel.numFmt = '0.00';
       if (col === 28 || col === 29) cel.numFmt = '0.0';
-      if (col >= 31) cel.numFmt = 'dd/mm/yyyy';
+      if (col === 31 || col === 32) cel.numFmt = 'dd/mm/yyyy';
+      if (col === 33) cel.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
     }
   });
 
@@ -370,6 +589,9 @@ function dibujarRegistros() {
     if (al.length) conAlerta++;
     if (soloRev && !al.length) return '';
     if (q && [r.ESTABLECIMIENTO, r.ZONA, r.DISTRITO, r.OBSERVACIONES, r.VUELTA].join(' ').toUpperCase().indexOf(q) < 0) return '';
+    if (noRealizada(r)) return '<tr style="background:#fdecea"><td>-</td><td>' + esc(r.DISTRITO) + '</td><td>' + esc(r.ESTABLECIMIENTO) + '</td><td>' + esc(r.ZONA) + '</td><td>' + esc(r.VUELTA || '-') + '</td>' +
+      '<td class="num">' + fmt(r.VIV_PRO) + '</td><td colspan="5" style="text-align:center"><b>\u26a0\ufe0f Vuelta no realizada</b></td><td>' + esc(r.OBSERVACIONES) + '</td>' +
+      '<td><div class="celda-acc"><button class="btn btn-peligro btn-mini" data-eliminar="' + esc(r.ID) + '">Quitar</button></div></td></tr>';
     var c = calc(r);
     return '<tr' + (al.length ? ' class="revisar"' : '') + '>' +
       '<td>' + fechaCorta(r.FECHA_INICIO) + (r.FECHA_TERMINO && r.FECHA_TERMINO !== r.FECHA_INICIO ? ' al ' + fechaCorta(r.FECHA_TERMINO) : '') + '</td>' +
@@ -379,14 +601,14 @@ function dibujarRegistros() {
       '<td>' + (al.length ? '<span class="marca-rev" title="' + esc(al.join('. ')) + '">Revisar</span> ' : '') + esc(r.OBSERVACIONES) + '</td>' +
       '<td><div class="celda-acc"><button class="btn btn-claro btn-mini" data-editar="' + esc(r.ID) + '">Editar</button><button class="btn btn-peligro btn-mini" data-eliminar="' + esc(r.ID) + '">Eliminar</button></div></td></tr>';
   }).join('');
-  $('resumenRegistros').textContent = 'Cada fila es un d\u00eda de trabajo; en el panel y el consolidado los d\u00edas seguidos de la misma zona y vuelta se suman en una sola intervenci\u00f3n. ' + ESTADO.registros.length + ' registros en total' + (conAlerta ? ', ' + conAlerta + ' por revisar (en amarillo; pasa el cursor sobre "Revisar" para ver el motivo).' : '.');
+  $('resumenRegistros').textContent = 'Cada fila es un d\u00eda de trabajo; en el panel y el consolidado los d\u00edas seguidos de la misma zona y vuelta se suman en una sola intervenci\u00f3n (las programadas de cada d\u00eda son las pendientes, as\u00ed la suma da el total del sector). ' + ESTADO.registros.length + ' registros en total' + (conAlerta ? ', ' + conAlerta + ' por revisar (en amarillo; pasa el cursor sobre "Revisar" para ver el motivo).' : '.');
   $('tablaRegistros').innerHTML = '<thead><tr><th>Fecha</th><th>Distrito</th><th>Establecimiento</th><th>Zona</th><th>Vuelta</th><th class="num">Program.</th><th class="num">Nebuliz.</th><th class="num">Cerradas</th><th class="num">Renuentes</th><th class="num">No visit.</th><th class="num">Cobertura</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
     (filas || '<tr><td colspan="13">No hay registros que coincidan. Registra una intervenci\u00f3n o importa el Excel hist\u00f3rico.</td></tr>') + '</tbody>';
 }
 
 async function eliminarRegistro(id) {
   var r = ESTADO.registros.find(function (x) { return x.ID === id; });
-  if (!r || !confirm('\u00bfEliminar el registro de ' + r.ESTABLECIMIENTO + ' (' + (r.ZONA || 'sin zona') + ', vuelta ' + (r.VUELTA || '-') + ')? No se puede deshacer.')) return;
+  if (!r || !confirm((noRealizada(r) ? '\u00bfQuitar el motivo de vuelta no realizada? ' : '') + '\u00bfEliminar el registro de ' + r.ESTABLECIMIENTO + ' (' + (r.ZONA || 'sin zona') + ', vuelta ' + (r.VUELTA || '-') + ')? No se puede deshacer.')) return;
   cargando(true);
   try { await api('eliminar', { id: id }); ESTADO.registros = ESTADO.registros.filter(function (x) { return x.ID !== id; }); refrescarTodo(); avisar('Registro eliminado.'); }
   catch (e) { avisar(e.message, true); }
@@ -445,7 +667,7 @@ function llenarListas() {
 function abrirFormulario(id) {
   var r = id ? ESTADO.registros.find(function (x) { return x.ID === id; }) : null;
   ESTADO.editandoId = r ? r.ID : null;
-  ESTADO.gastoManual = !!r;
+  ESTADO.gastoManual = !!r; ESTADO.proManual = !!r; ESTADO.mzManual = !!r;
   $('formReg').reset(); $('formError').textContent = '';
   document.querySelectorAll('#formReg .invalido').forEach(function (e) { e.classList.remove('invalido'); });
   if (r) {
@@ -463,7 +685,7 @@ function abrirFormulario(id) {
     $('idEdicion').textContent = '';
     $('btnGuardar').textContent = 'Guardar registro';
   }
-  llenarListas(); actualizarCalculos();
+  llenarListas(); actualizarCalculos(); revisarVuelta();
   mostrarVista('formulario');
   $('DISTRITO').focus();
 }
@@ -569,8 +791,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.classList.contains('gasto')) ESTADO.gastoManual = true;
     if (e.target.id === 'VIV_PRO' && !ESTADO.gastoManual) recalcularGasto();
     if (e.target.id === 'DISTRITO') llenarListas();
+    if (e.target.id === 'VIV_PRO') ESTADO.proManual = true;
+    if (e.target.id === 'MZ_PRO') ESTADO.mzManual = true;
     actualizarCalculos();
+    if (['PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA', 'FECHA_INICIO'].indexOf(e.target.id) >= 0) revisarVuelta();
   });
+  $('formReg').addEventListener('change', function (e) { if (['ESTABLECIMIENTO', 'ZONA', 'VUELTA', 'FECHA_INICIO'].indexOf(e.target.id) >= 0) revisarVuelta(); });
   $('btnRecalcGasto').addEventListener('click', function () { ESTADO.gastoManual = false; recalcularGasto(); });
   $('btnCancelar').addEventListener('click', function () { ESTADO.editandoId = null; mostrarVista('registros'); });
 
