@@ -30,13 +30,151 @@ function fechaCorta(f) { return f ? f.slice(8, 10) + '/' + f.slice(5, 7) + '/' +
 function claseCob(p) { return p === null ? '' : p < 0.6 ? 'baja' : p < 0.8 ? 'media' : 'alta'; }
 
 /* ---------- Comunicaci\u00f3n con Apps Script ---------- */
-async function api(accion, datos) {
+/* Llamada al servidor sin cerrar la sesi\u00f3n (la usa la sincronizaci\u00f3n). Si no hay se\u00f1al lanza un error de red. */
+async function apiRaw(accion, datos) {
   var cuerpo = Object.assign({ accion: accion, token: ESTADO.token }, datos || {});
-  var r = await fetch(CONFIG.API_URL, { method: 'POST', body: JSON.stringify(cuerpo) });
-  var j = await r.json();
-  if (!j.ok && j.error === 'SESION') { cerrarSesion(); throw new Error('La sesi\u00f3n venci\u00f3. Ingresa de nuevo.'); }
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var tm = ctrl ? setTimeout(function () { ctrl.abort(); }, 30000) : null;
+  try {
+    var r = await fetch(CONFIG.API_URL, { method: 'POST', body: JSON.stringify(cuerpo), signal: ctrl ? ctrl.signal : undefined });
+    var j = await r.json();
+  } finally { if (tm) clearTimeout(tm); }
+  if (!j.ok && j.error === 'SESION') { var e = new Error('La sesi\u00f3n venci\u00f3. Ingresa de nuevo.'); e.code = 'SESION'; throw e; }
   if (!j.ok) throw new Error(j.error || 'Error desconocido');
   return j;
+}
+async function api(accion, datos) {
+  try { return await apiRaw(accion, datos); }
+  catch (e) { if (e.code === 'SESION') cerrarSesion(); throw e; }
+}
+function errRed(e) { return !!e && !e.code && (e.name === 'TypeError' || e.name === 'AbortError' || /fetch|network|load failed/i.test(e.message || '')); }
+
+/* ---------- Trabajo sin internet ---------- */
+/* Los registros se guardan primero en el equipo (cola) y se env\u00edan al servidor cuando hay internet. */
+var COLA_KEY = 'neb_cola', DATOS_KEY = 'neb_datos', CLAVE_H = 'neb_clave_h', TOKEN_KEY = 'neb_token';
+function leerCola() { try { return JSON.parse(localStorage.getItem(COLA_KEY)) || []; } catch (e) { return []; } }
+function guardarCola(c) { try { localStorage.setItem(COLA_KEY, JSON.stringify(c)); } catch (e) {} pintarSync(); }
+function guardarCache() { try { localStorage.setItem(DATOS_KEY, JSON.stringify({ registros: ESTADO.registros, cfg: ESTADO.cfg, fecha: new Date().toISOString() })); } catch (e) {} }
+function leerCache() { try { return JSON.parse(localStorage.getItem(DATOS_KEY)); } catch (e) { return null; } }
+function esTmp(id) { return /^TMP-/.test(String(id || '')); }
+async function hashClave(c) {
+  try { var b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('neb|' + c)); return Array.from(new Uint8Array(b)).map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join(''); }
+  catch (e) { return ''; }
+}
+function normalizarNum(r) { NUMERICOS.forEach(function (c) { r[c] = r[c] === '' || r[c] === null || r[c] === undefined ? null : n(r[c]); }); return r; }
+
+function aplicarLocal(e) {
+  if (e.op === 'guardar') {
+    var r = normalizarNum(Object.assign({}, e.registro, { PEND: true, ERR: e.err || '' }));
+    var i = ESTADO.registros.findIndex(function (x) { return x.ID === r.ID; });
+    if (i >= 0) ESTADO.registros[i] = r; else ESTADO.registros.push(r);
+  } else ESTADO.registros = ESTADO.registros.filter(function (x) { return x.ID !== e.id; });
+}
+function encolar(e) {
+  var c = leerCola(), id = e.op === 'guardar' ? e.registro.ID : e.id;
+  c = c.filter(function (x) { return !(x.op === 'guardar' && x.registro.ID === id); });
+  if (!(e.op === 'eliminar' && esTmp(id))) c.push(e);
+  guardarCola(c);
+}
+
+/* Guarda un registro: queda en el equipo y se intenta enviar al momento. Devuelve true si ya lleg\u00f3 al servidor. */
+async function guardarRegistro(o) {
+  o = Object.assign({}, o);
+  if (!o.ID) o.ID = 'TMP-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+  var tmp = o.ID, e = { op: 'guardar', registro: o, t: Date.now() };
+  encolar(e); aplicarLocal(e); guardarCache(); refrescarTodo();
+  await sincronizar(true);
+  return !leerCola().some(function (x) { return x.op === 'guardar' && x.registro.ID === tmp; });
+}
+
+var sincronizando = false;
+async function sincronizar(silencioso) {
+  var c = leerCola();
+  if (sincronizando || !c.length) { pintarSync(); return; }
+  if (!navigator.onLine) { pintarSync(); return; }
+  if (!ESTADO.token || ESTADO.token === 'offline') { ESTADO.necesitaLogin = true; pintarSync(); return; }
+  sincronizando = true; pintarSync();
+  var enviados = 0;
+  try {
+    while ((c = leerCola()).length) {
+      var e = c[0];
+      try {
+        if (e.op === 'guardar') {
+          var reg = Object.assign({}, e.registro), tmp = reg.ID;
+          delete reg.PEND; delete reg.ERR;
+          if (esTmp(reg.ID)) reg.ID = '';
+          var j = await apiRaw('guardar', { registro: reg });
+          var nuevo = normalizarNum(j.registro);
+          var i = ESTADO.registros.findIndex(function (x) { return x.ID === tmp; });
+          if (i >= 0) ESTADO.registros[i] = nuevo; else ESTADO.registros.push(nuevo);
+          if (ESTADO.editandoId === tmp) ESTADO.editandoId = nuevo.ID;
+        } else {
+          try { await apiRaw('eliminar', { id: e.id }); } catch (er) { if (!/No se encontr/.test(er.message || '') || er.code) throw er; }
+        }
+        guardarCola(leerCola().filter(function (y) { return y.t !== e.t; })); enviados++;
+      } catch (err) {
+        if (errRed(err)) break;
+        if (err.code === 'SESION') { ESTADO.necesitaLogin = true; break; }
+        // El servidor rechaz\u00f3 el dato: se marca con el error y se pasa al final para no trabar los dem\u00e1s
+        c = leerCola(); var x = c.find(function (y) { return y.t === e.t; }); if (!x) continue; c = c.filter(function (y) { return y !== x; }); x.err = err.message; c.push(x); guardarCola(c);
+        if (x.op === 'guardar') aplicarLocal(x);
+        if (c.every(function (y) { return y.err; })) break;
+      }
+    }
+  } finally { sincronizando = false; }
+  if (enviados) { ESTADO.necesitaLogin = false; guardarCache(); refrescarTodo(); if (!silencioso || leerCola().length === 0) avisar(enviados + ' registro' + (enviados === 1 ? '' : 's') + ' enviado' + (enviados === 1 ? '' : 's') + ' al servidor.'); }
+  pintarSync();
+}
+
+async function loginSincronizar() {
+  var clave = prompt('Ingresa la contrase\u00f1a del sistema para enviar los registros guardados en este equipo:');
+  if (!clave) return;
+  try {
+    var j = await apiRaw('login', { clave: clave });
+    ESTADO.token = j.token; localStorage.setItem(TOKEN_KEY, j.token); localStorage.setItem(CLAVE_H, await hashClave(clave));
+    ESTADO.necesitaLogin = false;
+    await sincronizar(); await recargar();
+  } catch (e) { avisar(errRed(e) ? 'Sin conexi\u00f3n. Intenta cuando haya internet.' : e.message, true); }
+}
+
+function pintarSync() {
+  var el = $('estadoSync');
+  if (!el) {
+    var ref = $('btnSalir'); if (!ref) return;
+    el = document.createElement('span'); el.id = 'estadoSync';
+    el.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-right:10px;padding:5px 10px;border-radius:999px;font-size:.8rem;font-weight:600;background:rgba(255,255,255,.16);color:#fff;white-space:nowrap';
+    ref.parentElement.insertBefore(el, ref);
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.acc === 'login') loginSincronizar(); else sincronizar();
+    });
+  }
+  var c = leerCola(), np = c.length, nErr = c.filter(function (x) { return x.err; }).length;
+  var btn = 'style="border:0;border-radius:999px;padding:2px 9px;font:inherit;font-size:.75rem;cursor:pointer;background:#fff;color:#14352a"';
+  var txt;
+  if (!navigator.onLine) txt = '\ud83d\udcf4 Sin internet' + (np ? ' \u00b7 ' + np + ' por enviar' : ' \u00b7 puedes registrar');
+  else if (sincronizando) txt = '\ud83d\udd04 Enviando ' + np + '\u2026';
+  else if (np && ESTADO.necesitaLogin) txt = '\ud83d\udd11 ' + np + ' por enviar <button type="button" data-acc="login" ' + btn + '>Ingresar y enviar</button>';
+  else if (np) txt = (nErr ? '\u26a0\ufe0f ' + nErr + ' con error \u00b7 ' : '\u23f3 ') + np + ' por enviar <button type="button" data-acc="sync" ' + btn + '>Enviar ahora</button>';
+  else txt = '\u2705 Sincronizado';
+  el.innerHTML = txt;
+  el.title = nErr ? c.filter(function (x) { return x.err; }).map(function (x) { return (x.registro ? x.registro.ESTABLECIMIENTO : '') + ': ' + x.err; }).join('\n') : '';
+}
+
+/* Guarda en el equipo la p\u00e1gina y las librer\u00edas para poder abrirla sin internet */
+function prepararSinInternet() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+  if (!window.caches) return;
+  var urls = [location.href.split('#')[0], 'index.html', 'dashboard.html', 'script.js'];
+  document.querySelectorAll('script[src],link[rel="stylesheet"][href],link[rel="icon"][href],img[src]').forEach(function (x) { urls.push(x.src || x.href); });
+  caches.open('neb-recursos').then(function (cache) {
+    urls.forEach(function (u) {
+      var abs = new URL(u, location.href);
+      var mismo = abs.origin === location.origin;
+      fetch(abs.href, mismo ? { cache: 'no-cache' } : { mode: 'no-cors' }).then(function (r) { if (r.ok || r.type === 'opaque') cache.put(abs.href, r); }).catch(function () {});
+    });
+  });
 }
 
 function cargando(si) { $('cargando').hidden = !si; }
@@ -52,18 +190,28 @@ async function ingresar(ev) {
   $('loginError').textContent = '';
   if (CONFIG.API_URL.indexOf('http') !== 0) { $('loginError').textContent = 'Falta pegar la URL /exec en CONFIG.API_URL de script.js.'; return; }
   cargando(true);
+  var clave = $('clave').value;
   try {
-    var j = await api('login', { clave: $('clave').value });
+    var j = await api('login', { clave: clave });
     ESTADO.token = j.token;
-    sessionStorage.setItem('neb_token', j.token);
+    localStorage.setItem(TOKEN_KEY, j.token);
+    localStorage.setItem(CLAVE_H, await hashClave(clave));
     await iniciarApp();
-  } catch (e) { $('loginError').textContent = e.message; }
+  } catch (e) {
+    // Sin internet: entra con los datos guardados en este equipo si la contrase\u00f1a coincide con la \u00faltima usada
+    var h = localStorage.getItem(CLAVE_H);
+    if (errRed(e) && leerCache() && h && (await hashClave(clave)) === h) {
+      ESTADO.token = localStorage.getItem(TOKEN_KEY) || 'offline';
+      try { await iniciarApp(); avisar('Sin internet: trabajas con los datos guardados en este equipo. Se enviar\u00e1 todo cuando vuelva la conexi\u00f3n.'); }
+      catch (e2) { $('loginError').textContent = e2.message; }
+    } else $('loginError').textContent = errRed(e) ? (leerCache() ? 'Sin internet. Escribe la misma contrase\u00f1a de la \u00faltima vez para entrar sin conexi\u00f3n.' : 'Sin internet. La primera vez debes ingresar con conexi\u00f3n para descargar los datos.') : e.message;
+  }
   cargando(false);
 }
 
 function cerrarSesion() {
   if (ESTADO.token) { fetch(CONFIG.API_URL, { method: 'POST', keepalive: true, body: JSON.stringify({ accion: 'salir', token: ESTADO.token }) }).catch(function () {}); }
-  ESTADO.token = null; sessionStorage.removeItem('neb_token');
+  ESTADO.token = null; localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem('neb_token');
   $('app').hidden = true; $('pantallaLogin').hidden = false; $('clave').value = '';
 }
 
@@ -74,9 +222,22 @@ async function iniciarApp() {
 }
 
 async function recargar() {
-  var j = await api('listar');
-  ESTADO.registros = j.registros.map(function (r) { NUMERICOS.forEach(function (c) { r[c] = r[c] === null ? null : n(r[c]); }); return r; });
-  ESTADO.cfg = Object.assign({}, TASAS_DEFECTO, j.config || {});
+  try {
+    if (navigator.onLine) await sincronizar(true);
+    var j = await api('listar');
+    ESTADO.registros = j.registros.map(function (r) { NUMERICOS.forEach(function (c) { r[c] = r[c] === null ? null : n(r[c]); }); return r; });
+    ESTADO.cfg = Object.assign({}, TASAS_DEFECTO, j.config || {});
+    leerCola().forEach(aplicarLocal); // lo que a\u00fan no se envi\u00f3 sigue visible
+    ESTADO.sinInternet = false; guardarCache();
+  } catch (e) {
+    if (!errRed(e)) throw e;
+    var cache = leerCache();
+    if (!cache) throw new Error('Sin internet y sin datos guardados en este equipo. Ingresa una vez con conexi\u00f3n.');
+    ESTADO.registros = cache.registros || []; ESTADO.cfg = Object.assign({}, TASAS_DEFECTO, cache.cfg || {});
+    leerCola().forEach(aplicarLocal);
+    ESTADO.sinInternet = true;
+  }
+  pintarSync();
   llenarFiltros(); llenarListas(); dibujarPanel(); dibujarRegistros();
 }
 
@@ -382,13 +543,8 @@ async function registrarMotivo(idx, v) {
   NUMERICOS.forEach(function (c) { if (c !== 'VIV_PRO') o[c] = ''; });
   cargando(true);
   try {
-    var j = await api('guardar', { registro: o });
-    var nuevo = j.registro;
-    if (!noRealizada(nuevo)) throw new Error('El servidor no guard\u00f3 el tipo de registro. Actualiza Codigo.gs (ejecuta "instalar" y publica una nueva versi\u00f3n).');
-    NUMERICOS.forEach(function (c) { nuevo[c] = nuevo[c] === '' ? null : n(nuevo[c]); });
-    ESTADO.registros.push(nuevo);
-    refrescarTodo();
-    avisar('Motivo registrado: vuelta ' + v + ' no realizada.');
+    var ok = await guardarRegistro(o);
+    avisar('Motivo registrado: vuelta ' + v + ' no realizada' + (ok ? '.' : ' (guardado en el equipo; se enviar\u00e1 cuando haya internet).'));
   } catch (e) { avisar(e.message, true); }
   cargando(false);
 }
@@ -589,8 +745,9 @@ function dibujarRegistros() {
     if (al.length) conAlerta++;
     if (soloRev && !al.length) return '';
     if (q && [r.ESTABLECIMIENTO, r.ZONA, r.DISTRITO, r.OBSERVACIONES, r.VUELTA].join(' ').toUpperCase().indexOf(q) < 0) return '';
+    var marcaP = r.PEND ? '<span class="marca-rev" style="background:' + (r.ERR ? '#fde2e1;color:#9c0006' : '#fff3c4;color:#5c4300') + '" title="' + esc(r.ERR || 'Guardado en este equipo; se enviar\u00e1 cuando haya internet') + '">' + (r.ERR ? '\u26a0\ufe0f No se pudo enviar' : '\u23f3 Por enviar') + '</span> ' : '';
     if (noRealizada(r)) return '<tr style="background:#fdecea"><td>-</td><td>' + esc(r.DISTRITO) + '</td><td>' + esc(r.ESTABLECIMIENTO) + '</td><td>' + esc(r.ZONA) + '</td><td>' + esc(r.VUELTA || '-') + '</td>' +
-      '<td class="num">' + fmt(r.VIV_PRO) + '</td><td colspan="5" style="text-align:center"><b>\u26a0\ufe0f Vuelta no realizada</b></td><td>' + esc(r.OBSERVACIONES) + '</td>' +
+      '<td class="num">' + fmt(r.VIV_PRO) + '</td><td colspan="5" style="text-align:center"><b>\u26a0\ufe0f Vuelta no realizada</b></td><td>' + marcaP + esc(r.OBSERVACIONES) + '</td>' +
       '<td><div class="celda-acc"><button class="btn btn-peligro btn-mini" data-eliminar="' + esc(r.ID) + '">Quitar</button></div></td></tr>';
     var c = calc(r);
     return '<tr' + (al.length ? ' class="revisar"' : '') + '>' +
@@ -598,7 +755,7 @@ function dibujarRegistros() {
       '<td>' + esc(r.DISTRITO) + '</td><td>' + esc(r.ESTABLECIMIENTO) + '</td><td>' + esc(r.ZONA) + '</td><td>' + esc(r.VUELTA || '-') + '</td>' +
       '<td class="num">' + fmt(c.pro) + '</td><td class="num">' + fmt(c.neb) + '</td><td class="num">' + fmt(c.cer) + '</td><td class="num">' + fmt(c.ren) + '</td><td class="num">' + fmt(c.novis) + '</td>' +
       '<td class="num"><span class="cob ' + claseCob(c.pNeb) + '">' + fmtPct(c.pNeb) + '</span></td>' +
-      '<td>' + (al.length ? '<span class="marca-rev" title="' + esc(al.join('. ')) + '">Revisar</span> ' : '') + esc(r.OBSERVACIONES) + '</td>' +
+      '<td>' + marcaP + (al.length ? '<span class="marca-rev" title="' + esc(al.join('. ')) + '">Revisar</span> ' : '') + esc(r.OBSERVACIONES) + '</td>' +
       '<td><div class="celda-acc"><button class="btn btn-claro btn-mini" data-editar="' + esc(r.ID) + '">Editar</button><button class="btn btn-peligro btn-mini" data-eliminar="' + esc(r.ID) + '">Eliminar</button></div></td></tr>';
   }).join('');
   $('resumenRegistros').textContent = 'Cada fila es un d\u00eda de trabajo; en el panel y el consolidado los d\u00edas seguidos de la misma zona y vuelta se suman en una sola intervenci\u00f3n (las programadas de cada d\u00eda son las pendientes, as\u00ed la suma da el total del sector). ' + ESTADO.registros.length + ' registros en total' + (conAlerta ? ', ' + conAlerta + ' por revisar (en amarillo; pasa el cursor sobre "Revisar" para ver el motivo).' : '.');
@@ -610,8 +767,12 @@ async function eliminarRegistro(id) {
   var r = ESTADO.registros.find(function (x) { return x.ID === id; });
   if (!r || !confirm((noRealizada(r) ? '\u00bfQuitar el motivo de vuelta no realizada? ' : '') + '\u00bfEliminar el registro de ' + r.ESTABLECIMIENTO + ' (' + (r.ZONA || 'sin zona') + ', vuelta ' + (r.VUELTA || '-') + ')? No se puede deshacer.')) return;
   cargando(true);
-  try { await api('eliminar', { id: id }); ESTADO.registros = ESTADO.registros.filter(function (x) { return x.ID !== id; }); refrescarTodo(); avisar('Registro eliminado.'); }
-  catch (e) { avisar(e.message, true); }
+  try {
+    var e = { op: 'eliminar', id: id, t: Date.now() };
+    encolar(e); aplicarLocal(e); guardarCache(); refrescarTodo();
+    await sincronizar(true);
+    avisar(esTmp(id) || !leerCola().some(function (x) { return x.op === 'eliminar' && x.id === id; }) ? 'Registro eliminado.' : 'Registro eliminado en el equipo; se borrar\u00e1 del servidor cuando haya internet.');
+  } catch (e2) { avisar(e2.message, true); }
   cargando(false);
 }
 
@@ -632,6 +793,7 @@ async function importarExcel(ev) {
   var f = ev.target.files[0]; ev.target.value = '';
   if (!f) return;
   if (typeof XLSX === 'undefined') { avisar('No se pudo cargar la librer\u00eda de Excel. Revisa tu conexi\u00f3n.', true); return; }
+  if (!navigator.onLine) { avisar('Para importar el Excel necesitas internet.', true); return; }
   cargando(true);
   try {
     var wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
@@ -746,14 +908,10 @@ async function guardarFormulario(ev) {
   if (dup && !confirm('Ya hay un registro de ' + o.ESTABLECIMIENTO + ', zona ' + (o.ZONA || '-') + ', vuelta ' + o.VUELTA + ' el ' + fechaCorta(o.FECHA_INICIO) + '. \u00bfGuardar de todos modos?')) return;
   cargando(true);
   try {
-    var j = await api('guardar', { registro: o });
-    var nuevo = j.registro;
-    NUMERICOS.forEach(function (c) { nuevo[c] = nuevo[c] === '' ? null : n(nuevo[c]); });
-    var i = ESTADO.registros.findIndex(function (r) { return r.ID === nuevo.ID; });
-    if (i >= 0) ESTADO.registros[i] = nuevo; else ESTADO.registros.push(nuevo);
-    refrescarTodo();
-    avisar(o.ID ? 'Cambios guardados.' : 'Registro guardado.');
-    if (o.ID) mostrarVista('registros'); else abrirFormulario(null);
+    var editando = !!o.ID;
+    var ok = await guardarRegistro(o);
+    avisar((editando ? 'Cambios guardados' : 'Registro guardado') + (ok ? '.' : ' en el equipo. Se enviar\u00e1 al servidor cuando haya internet.'));
+    if (editando) mostrarVista('registros'); else abrirFormulario(null);
   } catch (e) { $('formError').textContent = e.message; }
   cargando(false);
 }
@@ -769,7 +927,10 @@ function mostrarVista(v) {
 
 document.addEventListener('DOMContentLoaded', function () {
   $('formLogin').addEventListener('submit', ingresar);
-  $('btnSalir').addEventListener('click', function () { cerrarSesion(); window.location.href = 'index.html'; });
+  $('btnSalir').addEventListener('click', function () {
+    if (leerCola().length && !confirm('Hay ' + leerCola().length + ' registro(s) que a\u00fan no se env\u00edan. Quedar\u00e1n guardados en este equipo y se enviar\u00e1n cuando vuelvas a ingresar con internet. \u00bfSalir?')) return;
+    cerrarSesion(); window.location.href = 'index.html';
+  });
   document.querySelectorAll('.pestana').forEach(function (b) {
     b.addEventListener('click', function () { if (b.dataset.vista === 'formulario') abrirFormulario(null); else mostrarVista(b.dataset.vista); });
   });
@@ -800,7 +961,12 @@ document.addEventListener('DOMContentLoaded', function () {
   $('btnRecalcGasto').addEventListener('click', function () { ESTADO.gastoManual = false; recalcularGasto(); });
   $('btnCancelar').addEventListener('click', function () { ESTADO.editandoId = null; mostrarVista('registros'); });
 
-  var t = sessionStorage.getItem('neb_token');
+  prepararSinInternet();
+  window.addEventListener('online', function () { pintarSync(); sincronizar().then(function () { if (!leerCola().length && ESTADO.sinInternet) recargar().catch(function () {}); }); });
+  window.addEventListener('offline', pintarSync);
+  setInterval(function () { if (navigator.onLine && leerCola().length) sincronizar(true); }, 60000);
+
+  var t = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem('neb_token');
   if (t && CONFIG.API_URL.indexOf('http') === 0) {
     ESTADO.token = t; cargando(true);
     iniciarApp().catch(function () { cerrarSesion(); }).finally(function () { cargando(false); });
