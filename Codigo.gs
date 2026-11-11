@@ -21,7 +21,8 @@ var COLS = ['ID', 'PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'ZONA', 
   'VIV_PRO', 'VIV_NEB', 'VIV_CER', 'VIV_REN', 'VIV_DESH', 'MZ_PRO', 'MZ_NEB',
   'EQ_PORT_FRIO', 'EQ_PORT_CALIENTE', 'EQ_PESADO_FRIO', 'EQ_PESADO_CALIENTE',
   'INSECTICIDA_ML', 'INSECTICIDA_L', 'PETROLEO_GAL', 'GASOLINA_GAL',
-  'FECHA_INICIO', 'FECHA_TERMINO', 'OBSERVACIONES', 'CREADO', 'MODIFICADO'];
+  'FECHA_INICIO', 'FECHA_TERMINO', 'OBSERVACIONES', 'CREADO', 'MODIFICADO', 'TIPO'];
+// TIPO: vac\u00edo = d\u00eda de trabajo normal; NO_REALIZADA = vuelta que no se hizo (el motivo va en OBSERVACIONES)
 
 var NUMERICAS = ['VIV_PRO', 'VIV_NEB', 'VIV_CER', 'VIV_REN', 'VIV_DESH', 'MZ_PRO', 'MZ_NEB',
   'EQ_PORT_FRIO', 'EQ_PORT_CALIENTE', 'EQ_PESADO_FRIO', 'EQ_PESADO_CALIENTE',
@@ -39,11 +40,12 @@ var CFG_DEFECTO = [
 function instalar() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var reg = ss.getSheetByName(HOJA_REG) || ss.insertSheet(HOJA_REG);
+  if (reg.getMaxColumns() < COLS.length) reg.insertColumnsAfter(reg.getMaxColumns(), COLS.length - reg.getMaxColumns());
   reg.getRange(1, 1, 1, COLS.length).setValues([COLS]).setFontWeight('bold')
     .setBackground('#1f4e3d').setFontColor('#ffffff');
   reg.setFrozenRows(1);
   // Fechas e ID como texto para evitar cambios de zona horaria
-  ['ID', 'FECHA_INICIO', 'FECHA_TERMINO', 'CREADO', 'MODIFICADO', 'VUELTA'].forEach(function (c) {
+  ['ID', 'FECHA_INICIO', 'FECHA_TERMINO', 'CREADO', 'MODIFICADO', 'VUELTA', 'TIPO'].forEach(function (c) {
     reg.getRange(2, COLS.indexOf(c) + 1, reg.getMaxRows() - 1, 1).setNumberFormat('@');
   });
 
@@ -73,6 +75,7 @@ function doPost(e) {
       case 'listar': return json(listar());
       case 'guardar': return json(conBloqueo(function () { return guardar(p.registro); }));
       case 'eliminar': return json(conBloqueo(function () { return eliminar(p.id); }));
+      case 'eliminarVarios': return json(conBloqueo(function () { return eliminarVarios(p.ids); }));
       case 'importar': return json(conBloqueo(function () { return importar(p.registros); }));
       case 'salir': CacheService.getScriptCache().remove('t_' + p.token); return json({ ok: true });
       default: return json({ ok: false, error: 'Acci\u00f3n no reconocida: ' + p.accion });
@@ -154,11 +157,15 @@ function limpiar(r) {
       o[c] = v === null || v === undefined ? '' : String(v).trim();
     }
   });
-  ['PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA'].forEach(function (c) { o[c] = o[c].toUpperCase(); });
+  ['PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA', 'TIPO'].forEach(function (c) { o[c] = o[c].toUpperCase(); });
   return o;
 }
 
 function validar(o) {
+  if (o.TIPO === 'NO_REALIZADA') {
+    var f2 = ['DISTRITO', 'ESTABLECIMIENTO', 'VUELTA', 'OBSERVACIONES'].filter(function (c) { return !o[c]; });
+    return f2.length ? 'Faltan datos: ' + f2.join(', ') + ' (el motivo va en observaciones)' : '';
+  }
   var falta = ['DISTRITO', 'ESTABLECIMIENTO', 'VUELTA', 'FECHA_INICIO', 'FECHA_TERMINO'].filter(function (c) { return !o[c]; });
   if (falta.length) return 'Faltan datos: ' + falta.join(', ');
   if (o.VIV_PRO === '' || o.VIV_PRO <= 0) return 'Las viviendas programadas deben ser mayores que 0.';
@@ -205,6 +212,31 @@ function eliminar(id) {
   if (fila < 0) return { ok: false, error: 'No se encontr\u00f3 el registro.' };
   hojaReg().deleteRow(fila);
   return { ok: true };
+}
+
+/* Borra varios registros de una sola vez. Las filas se eliminan de abajo hacia arriba
+   (agrupando las consecutivas) para que no se desfasen los n\u00fameros de fila. */
+function eliminarVarios(ids) {
+  ids = (ids || []).map(String);
+  if (!ids.length) return { ok: false, error: 'No se seleccion\u00f3 ning\u00fan registro.' };
+  var h = hojaReg();
+  if (h.getLastRow() < 2) return { ok: true, eliminados: 0, noEncontrados: ids };
+  var buscar = {};
+  ids.forEach(function (id) { buscar[id] = 1; });
+  var filas = [];
+  h.getRange(2, 1, h.getLastRow() - 1, 1).getValues().forEach(function (r, i) {
+    var id = String(r[0]);
+    if (buscar[id]) { filas.push(i + 2); delete buscar[id]; }
+  });
+  filas.sort(function (a, b) { return b - a; });
+  var k = 0;
+  while (k < filas.length) {
+    var fin = filas[k], ini = fin;
+    while (k + 1 < filas.length && filas[k + 1] === ini - 1) { k++; ini--; }
+    h.deleteRows(ini, fin - ini + 1);
+    k++;
+  }
+  return { ok: true, eliminados: filas.length, noEncontrados: Object.keys(buscar) };
 }
 
 function importar(lista) {
