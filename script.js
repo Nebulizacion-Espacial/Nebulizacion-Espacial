@@ -867,6 +867,57 @@ function leerFecha(v) {
   return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : '';
 }
 
+/* Excel con la hoja REGISTROS del sistema (columnas ESTABLECIMIENTO, VIV_PRO...) */
+function leerFormatoSistema(wb) {
+  var hoja = wb.Sheets['REGISTROS'] || wb.Sheets[wb.SheetNames[0]];
+  var filas = XLSX.utils.sheet_to_json(hoja, { defval: '' });
+  if (!filas.length || !('ESTABLECIMIENTO' in filas[0]) || !('VIV_PRO' in filas[0])) return null;
+  return filas.map(function (r) {
+    var o = { ID: r.ID ? String(r.ID) : '', CREADO: r.CREADO || '' };
+    CAMPOS.forEach(function (c) { o[c] = r[c] === undefined ? '' : r[c]; });
+    o.FECHA_INICIO = leerFecha(r.FECHA_INICIO); o.FECHA_TERMINO = leerFecha(r.FECHA_TERMINO);
+    return o;
+  });
+}
+
+/* Excel original del consolidado (Formato_Nebulizaci\u00f3n_2026): t\u00edtulo, encabezados agrupados y
+   una fila de c\u00f3digos (Provincia, Distrito, UNGETS, Localidad, zonas, Vuelta, viv_pro, viv_neb...). */
+function leerFormatoOriginal(wb) {
+  function norm(v) { return String(v === null || v === undefined ? '' : v).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u00b0\u00ba]/g, '').replace(/\s+/g, '_'); }
+  var MAPA = { provincia: 'PROVINCIA', distrito: 'DISTRITO', ungets: 'UNGETS', localidad: 'ESTABLECIMIENTO', zonas: 'ZONA', zona: 'ZONA', vuelta: 'VUELTA',
+    viv_pro: 'VIV_PRO', viv_neb: 'VIV_NEB', viv_cer: 'VIV_CER', viv_ren: 'VIV_REN', viv_desh: 'VIV_DESH', mz_pro: 'MZ_PRO', mz_neb: 'MZ_NEB',
+    n_eq_por_frio: 'EQ_PORT_FRIO', n_eq_por_cali: 'EQ_PORT_CALIENTE', n_eq_pesado_frio: 'EQ_PESADO_FRIO', n_eq_pesado_cali: 'EQ_PESADO_CALIENTE',
+    insec_ml: 'INSECTICIDA_ML', insec_litros: 'INSECTICIDA_L', petr_galones: 'PETROLEO_GAL', gasolina_galones: 'GASOLINA_GAL',
+    inicio: 'FECHA_INICIO', termino: 'FECHA_TERMINO', observaciones: 'OBSERVACIONES' };
+  var nombres = wb.SheetNames.slice().sort(function (a, b) { return (/base/i.test(b) ? 1 : 0) - (/base/i.test(a) ? 1 : 0); });
+  for (var h = 0; h < nombres.length; h++) {
+    var filas = XLSX.utils.sheet_to_json(wb.Sheets[nombres[h]], { header: 1, defval: '', raw: true });
+    var fc = -1;
+    for (var i = 0; i < Math.min(filas.length, 30); i++) if (filas[i].map(norm).indexOf('viv_pro') >= 0) { fc = i; break; }
+    if (fc < 0) continue;
+    var col = {};
+    filas[fc].forEach(function (v, j) { var c = MAPA[norm(v)]; if (c && !(c in col)) col[c] = j; });
+    if (!('ESTABLECIMIENTO' in col)) continue;
+    // En el formato la columna del insecticida en ml no tiene c\u00f3digo: es la que est\u00e1 justo antes de insec_litros
+    if (!('INSECTICIDA_ML' in col) && 'INSECTICIDA_L' in col && !norm(filas[fc][col.INSECTICIDA_L - 1])) col.INSECTICIDA_ML = col.INSECTICIDA_L - 1;
+    var regs = filas.slice(fc + 1).map(function (f) {
+      var o = { ID: '', CREADO: '' };
+      CAMPOS.forEach(function (c) {
+        var v = c in col ? f[col[c]] : '';
+        if (NUMERICOS.indexOf(c) >= 0) o[c] = v === '' || v === null || isNaN(Number(v)) ? '' : Number(v);
+        else o[c] = String(v === null || v === undefined ? '' : v).trim().replace(/\s+/g, ' ');
+      });
+      ['PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA'].forEach(function (c) { o[c] = o[c].toUpperCase(); });
+      o.FECHA_INICIO = leerFecha(f[col.FECHA_INICIO]); o.FECHA_TERMINO = leerFecha(f[col.FECHA_TERMINO]) || o.FECHA_INICIO;
+      if (o.INSECTICIDA_ML === '' && o.INSECTICIDA_L !== '') o.INSECTICIDA_ML = +(o.INSECTICIDA_L * 1000).toFixed(2);
+      return o;
+    }).filter(function (o) { return o.ESTABLECIMIENTO && o.VIV_PRO !== ''; });
+    return { hoja: nombres[h], regs: regs };
+  }
+  return null;
+}
+function claveImport(r) { return [r.DISTRITO, r.ESTABLECIMIENTO, r.ZONA, r.VUELTA, r.FECHA_INICIO].map(normTxt).join('|') + '|' + n(r.VIV_PRO); }
+
 async function importarExcel(ev) {
   var f = ev.target.files[0]; ev.target.value = '';
   if (!f) return;
@@ -875,16 +926,20 @@ async function importarExcel(ev) {
   cargando(true);
   try {
     var wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
-    var hoja = wb.Sheets['REGISTROS'] || wb.Sheets[wb.SheetNames[0]];
-    var filas = XLSX.utils.sheet_to_json(hoja, { defval: '' });
-    if (!filas.length || !('ESTABLECIMIENTO' in filas[0]) || !('VIV_PRO' in filas[0])) throw new Error('El archivo no tiene las columnas del sistema (ESTABLECIMIENTO, VIV_PRO...). Usa el Excel hist\u00f3rico limpio o uno con la misma hoja REGISTROS.');
-    var regs = filas.filter(function (r) { return r.ESTABLECIMIENTO; }).map(function (r) {
-      var o = { ID: r.ID ? String(r.ID) : '', CREADO: r.CREADO || '' };
-      CAMPOS.forEach(function (c) { o[c] = r[c] === undefined ? '' : r[c]; });
-      o.FECHA_INICIO = leerFecha(r.FECHA_INICIO); o.FECHA_TERMINO = leerFecha(r.FECHA_TERMINO);
-      return o;
-    });
-    var imp = 0, omi = 0;
+    var regs = leerFormatoSistema(wb), origen = 'REGISTROS';
+    if (!regs) { var fo = leerFormatoOriginal(wb); if (fo) { regs = fo.regs; origen = fo.hoja; } }
+    if (!regs) throw new Error('No se reconoci\u00f3 el archivo. Debe ser el Excel del consolidado (hoja con la fila de c\u00f3digos viv_pro, viv_neb...) o uno con la hoja REGISTROS del sistema.');
+    regs = regs.filter(function (r) { return r.ESTABLECIMIENTO; });
+    // Evita duplicar filas que ya est\u00e1n en el sistema (mismo lugar, vuelta, fecha y programadas)
+    var hay = {}, nuevos = [], repetidos = 0;
+    ESTADO.registros.forEach(function (r) { hay[claveImport(r)] = 1; });
+    regs.forEach(function (r) { var k = claveImport(r); if (!r.ID && hay[k]) { repetidos++; return; } hay[k] = 1; nuevos.push(r); });
+    if (!nuevos.length) { cargando(false); avisar('Las ' + regs.length + ' filas de la hoja "' + origen + '" ya est\u00e1n en el sistema; no hay nada nuevo que importar.'); return; }
+    cargando(false);
+    if (!confirm('Hoja "' + origen + '": ' + regs.length + ' filas encontradas' + (repetidos ? ', ' + repetidos + ' ya est\u00e1n en el sistema' : '') + '.\n\n\u00bfImportar ' + nuevos.length + ' registro' + (nuevos.length === 1 ? '' : 's') + '?')) return;
+    cargando(true);
+    regs = nuevos;
+    var imp = 0, omi = repetidos;
     for (var i = 0; i < regs.length; i += 150) {
       var j = await api('importar', { registros: regs.slice(i, i + 150) });
       imp += j.importados; omi += j.omitidos;
