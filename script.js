@@ -17,7 +17,7 @@ var DIAS_CORTE = 7;
 var TASAS_DEFECTO = { ML_INSECTICIDA_POR_VIV: 5.26, GAL_PETROLEO_POR_VIV: 0.02642, GAL_GASOLINA_POR_VIV: 0.021136 };
 var COLORES = { neb: '#2f7d4f', cer: '#e0a526', ren: '#b23b2e', desh: '#8a9a92', novis: '#cfdad3', pro: '#14352a' };
 
-var ESTADO = { token: null, registros: [], cfg: {}, charts: {}, editandoId: null, gastoManual: false, proManual: false, mzManual: false, vueltas: [] };
+var ESTADO = { token: null, registros: [], cfg: {}, charts: {}, editandoId: null, gastoManual: false, proManual: false, mzManual: false, vueltas: [], sel: {}, ultimoSel: null };
 
 function $(id) { return document.getElementById(id); }
 function n(v) { var x = Number(v); return isFinite(x) ? x : 0; }
@@ -94,7 +94,7 @@ async function sincronizar(silencioso) {
   if (!navigator.onLine) { pintarSync(); return; }
   if (!ESTADO.token || ESTADO.token === 'offline') { ESTADO.necesitaLogin = true; pintarSync(); return; }
   sincronizando = true; pintarSync();
-  var enviados = 0;
+  var enviados = 0, borrados = 0;
   try {
     while ((c = leerCola()).length) {
       var e = c[0];
@@ -109,6 +109,18 @@ async function sincronizar(silencioso) {
           if (i >= 0) ESTADO.registros[i] = nuevo; else ESTADO.registros.push(nuevo);
           if (ESTADO.editandoId === tmp) ESTADO.editandoId = nuevo.ID;
         } else {
+          // Si hay varios borrados en cola se env\u00edan juntos en una sola llamada
+          var lote = e.err ? [] : leerCola().filter(function (y) { return y.op === 'eliminar' && !y.err; });
+          if (lote.length > 1) {
+            var hecho = true;
+            try { await apiRaw('eliminarVarios', { ids: lote.map(function (y) { return y.id; }) }); }
+            catch (er) { if (er.code || errRed(er) || !/no reconocida/i.test(er.message || '')) throw er; hecho = false; } // servidor sin actualizar: uno por uno
+            if (hecho) {
+              var ts = lote.map(function (y) { return y.t; });
+              guardarCola(leerCola().filter(function (y) { return ts.indexOf(y.t) < 0; })); borrados += lote.length;
+              continue;
+            }
+          }
           try { await apiRaw('eliminar', { id: e.id }); } catch (er) { if (!/No se encontr/.test(er.message || '') || er.code) throw er; }
         }
         guardarCola(leerCola().filter(function (y) { return y.t !== e.t; })); enviados++;
@@ -122,6 +134,7 @@ async function sincronizar(silencioso) {
       }
     }
   } finally { sincronizando = false; }
+  if (borrados && !enviados) { ESTADO.necesitaLogin = false; guardarCache(); }
   if (enviados) { ESTADO.necesitaLogin = false; guardarCache(); refrescarTodo(); if (!silencioso || leerCola().length === 0) avisar(enviados + ' registro' + (enviados === 1 ? '' : 's') + ' enviado' + (enviados === 1 ? '' : 's') + ' al servidor.'); }
   pintarSync();
 }
@@ -739,18 +752,22 @@ function textoFiltros() {
 function dibujarRegistros() {
   var q = $('buscar').value.trim().toUpperCase(), soloRev = $('soloRevisar').checked;
   var lista = ESTADO.registros.slice().sort(function (a, b) { return (b.FECHA_INICIO || '').localeCompare(a.FECHA_INICIO || ''); });
-  var conAlerta = 0;
+  var conAlerta = 0, visibles = [];
   var filas = lista.map(function (r) {
     var al = alertas(r);
     if (al.length) conAlerta++;
     if (soloRev && !al.length) return '';
     if (q && [r.ESTABLECIMIENTO, r.ZONA, r.DISTRITO, r.OBSERVACIONES, r.VUELTA].join(' ').toUpperCase().indexOf(q) < 0) return '';
+    visibles.push(r.ID);
+    var marcado = !!ESTADO.sel[r.ID];
+    var chk = '<td class="col-sel"><input type="checkbox" class="sel-reg" data-id="' + esc(r.ID) + '"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar registro"></td>';
     var marcaP = r.PEND ? '<span class="marca-rev" style="background:' + (r.ERR ? '#fde2e1;color:#9c0006' : '#fff3c4;color:#5c4300') + '" title="' + esc(r.ERR || 'Guardado en este equipo; se enviar\u00e1 cuando haya internet') + '">' + (r.ERR ? '\u26a0\ufe0f No se pudo enviar' : '\u23f3 Por enviar') + '</span> ' : '';
-    if (noRealizada(r)) return '<tr style="background:#fdecea"><td>-</td><td>' + esc(r.DISTRITO) + '</td><td>' + esc(r.ESTABLECIMIENTO) + '</td><td>' + esc(r.ZONA) + '</td><td>' + esc(r.VUELTA || '-') + '</td>' +
+    if (noRealizada(r)) return '<tr style="background:#fdecea"' + (marcado ? ' class="sel"' : '') + '>' + chk + '<td>-</td><td>' + esc(r.DISTRITO) + '</td><td>' + esc(r.ESTABLECIMIENTO) + '</td><td>' + esc(r.ZONA) + '</td><td>' + esc(r.VUELTA || '-') + '</td>' +
       '<td class="num">' + fmt(r.VIV_PRO) + '</td><td colspan="5" style="text-align:center"><b>\u26a0\ufe0f Vuelta no realizada</b></td><td>' + marcaP + esc(r.OBSERVACIONES) + '</td>' +
       '<td><div class="celda-acc"><button class="btn btn-peligro btn-mini" data-eliminar="' + esc(r.ID) + '">Quitar</button></div></td></tr>';
     var c = calc(r);
-    return '<tr' + (al.length ? ' class="revisar"' : '') + '>' +
+    var cls = ((al.length ? 'revisar ' : '') + (marcado ? 'sel' : '')).trim();
+    return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' + chk +
       '<td>' + fechaCorta(r.FECHA_INICIO) + (r.FECHA_TERMINO && r.FECHA_TERMINO !== r.FECHA_INICIO ? ' al ' + fechaCorta(r.FECHA_TERMINO) : '') + '</td>' +
       '<td>' + esc(r.DISTRITO) + '</td><td>' + esc(r.ESTABLECIMIENTO) + '</td><td>' + esc(r.ZONA) + '</td><td>' + esc(r.VUELTA || '-') + '</td>' +
       '<td class="num">' + fmt(c.pro) + '</td><td class="num">' + fmt(c.neb) + '</td><td class="num">' + fmt(c.cer) + '</td><td class="num">' + fmt(c.ren) + '</td><td class="num">' + fmt(c.novis) + '</td>' +
@@ -759,8 +776,69 @@ function dibujarRegistros() {
       '<td><div class="celda-acc"><button class="btn btn-claro btn-mini" data-editar="' + esc(r.ID) + '">Editar</button><button class="btn btn-peligro btn-mini" data-eliminar="' + esc(r.ID) + '">Eliminar</button></div></td></tr>';
   }).join('');
   $('resumenRegistros').textContent = 'Cada fila es un d\u00eda de trabajo; en el panel y el consolidado los d\u00edas seguidos de la misma zona y vuelta se suman en una sola intervenci\u00f3n (las programadas de cada d\u00eda son las pendientes, as\u00ed la suma da el total del sector). ' + ESTADO.registros.length + ' registros en total' + (conAlerta ? ', ' + conAlerta + ' por revisar (en amarillo; pasa el cursor sobre "Revisar" para ver el motivo).' : '.');
-  $('tablaRegistros').innerHTML = '<thead><tr><th>Fecha</th><th>Distrito</th><th>Establecimiento</th><th>Zona</th><th>Vuelta</th><th class="num">Program.</th><th class="num">Nebuliz.</th><th class="num">Cerradas</th><th class="num">Renuentes</th><th class="num">No visit.</th><th class="num">Cobertura</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
-    (filas || '<tr><td colspan="13">No hay registros que coincidan. Registra una intervenci\u00f3n o importa el Excel hist\u00f3rico.</td></tr>') + '</tbody>';
+  // Solo quedan seleccionados los registros que se ven con el filtro actual
+  var nuevaSel = {}; visibles.forEach(function (id) { if (ESTADO.sel[id]) nuevaSel[id] = 1; }); ESTADO.sel = nuevaSel;
+  ESTADO.visibles = visibles;
+  var todosMarcados = visibles.length > 0 && visibles.every(function (id) { return ESTADO.sel[id]; });
+  $('tablaRegistros').innerHTML = '<thead><tr><th class="col-sel"><input type="checkbox" id="selTodos" title="Seleccionar todos los que se ven"' + (todosMarcados ? ' checked' : '') + (visibles.length ? '' : ' disabled') + ' aria-label="Seleccionar todos"></th><th>Fecha</th><th>Distrito</th><th>Establecimiento</th><th>Zona</th><th>Vuelta</th><th class="num">Program.</th><th class="num">Nebuliz.</th><th class="num">Cerradas</th><th class="num">Renuentes</th><th class="num">No visit.</th><th class="num">Cobertura</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
+    (filas || '<tr><td colspan="14">No hay registros que coincidan. Registra una intervenci\u00f3n o importa el Excel hist\u00f3rico.</td></tr>') + '</tbody>';
+  actualizarSelTodos();
+}
+
+/* ---------- Selecci\u00f3n m\u00faltiple para eliminar ---------- */
+function pintarSeleccion() {
+  var nSel = Object.keys(ESTADO.sel).length, barra = $('barraSel');
+  if (!barra) return;
+  barra.hidden = !nSel;
+  $('cuentaSel').textContent = nSel + ' registro' + (nSel === 1 ? '' : 's') + ' seleccionado' + (nSel === 1 ? '' : 's');
+  $('btnEliminarSel').textContent = 'Eliminar seleccionados (' + nSel + ')';
+}
+function marcarFila(id, si) {
+  if (si) ESTADO.sel[id] = 1; else delete ESTADO.sel[id];
+  var cb = [].find.call(document.querySelectorAll('#tablaRegistros .sel-reg'), function (x) { return x.dataset.id === id; });
+  if (cb) { cb.checked = si; cb.closest('tr').classList.toggle('sel', si); }
+}
+function actualizarSelTodos() {
+  var v = ESTADO.visibles || [], st = $('selTodos'), nSel = Object.keys(ESTADO.sel).length;
+  if (st) { st.checked = v.length > 0 && v.every(function (id) { return ESTADO.sel[id]; }); st.indeterminate = !st.checked && nSel > 0; }
+  pintarSeleccion();
+}
+function clicSeleccion(e) {
+  var cb = e.target;
+  if (!cb || cb.type !== 'checkbox') return;
+  if (cb.id === 'selTodos') {
+    (ESTADO.visibles || []).forEach(function (id) { marcarFila(id, cb.checked); });
+    ESTADO.ultimoSel = null;
+  } else if (cb.classList.contains('sel-reg')) {
+    var id = cb.dataset.id, v = ESTADO.visibles || [];
+    // Con Shift se marca o desmarca todo el tramo desde la \u00faltima casilla tocada
+    if (e.shiftKey && ESTADO.ultimoSel && v.indexOf(ESTADO.ultimoSel) >= 0) {
+      var a = v.indexOf(ESTADO.ultimoSel), b = v.indexOf(id);
+      v.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function (x) { marcarFila(x, cb.checked); });
+    } else marcarFila(id, cb.checked);
+    ESTADO.ultimoSel = id;
+  } else return;
+  actualizarSelTodos();
+}
+async function eliminarSeleccionados() {
+  var regs = ESTADO.registros.filter(function (x) { return ESTADO.sel[x.ID]; });
+  if (!regs.length) return;
+  var ids = regs.map(function (r) { return r.ID; });
+  var muestra = regs.slice(0, 5).map(function (r) { return '- ' + (r.FECHA_INICIO ? fechaCorta(r.FECHA_INICIO) + ' ' : '') + r.ESTABLECIMIENTO + ' (' + (r.ZONA || 'sin zona') + ', vuelta ' + (r.VUELTA || '-') + ')'; }).join('\n');
+  if (regs.length > 5) muestra += '\n... y ' + (regs.length - 5) + ' m\u00e1s';
+  if (!confirm('\u00bfEliminar ' + regs.length + ' registro' + (regs.length === 1 ? '' : 's') + '?\n\n' + muestra + '\n\nNo se puede deshacer.')) return;
+  cargando(true);
+  try {
+    var t0 = Date.now();
+    regs.forEach(function (r, i) { var e = { op: 'eliminar', id: r.ID, t: t0 + i }; encolar(e); aplicarLocal(e); });
+    ESTADO.sel = {}; ESTADO.ultimoSel = null;
+    guardarCache(); refrescarTodo();
+    await sincronizar(true);
+    var quedan = leerCola().filter(function (x) { return x.op === 'eliminar' && ids.indexOf(x.id) >= 0; }).length;
+    avisar(quedan ? regs.length + ' registros eliminados en el equipo; ' + quedan + ' se borrar\u00e1n del servidor cuando haya internet.'
+      : regs.length + ' registro' + (regs.length === 1 ? '' : 's') + ' eliminado' + (regs.length === 1 ? '' : 's') + '.');
+  } catch (e2) { avisar(e2.message, true); }
+  cargando(false);
 }
 
 async function eliminarRegistro(id) {
@@ -947,6 +1025,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (b.dataset.editar) abrirFormulario(b.dataset.editar);
     if (b.dataset.eliminar) eliminarRegistro(b.dataset.eliminar);
   });
+  $('tablaRegistros').addEventListener('click', clicSeleccion);
+  $('btnEliminarSel').addEventListener('click', eliminarSeleccionados);
+  $('btnQuitarSel').addEventListener('click', function () { Object.keys(ESTADO.sel).forEach(function (id) { marcarFila(id, false); }); ESTADO.ultimoSel = null; actualizarSelTodos(); });
   $('formReg').addEventListener('submit', guardarFormulario);
   $('formReg').addEventListener('input', function (e) {
     if (e.target.classList.contains('gasto')) ESTADO.gastoManual = true;
