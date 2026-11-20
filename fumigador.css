@@ -152,3 +152,11 @@ details.bloque[open] .rejilla{margin-top:12px}
 .instalar .nota{margin-top:8px;line-height:1.4}
 /* Cuando se abre como aplicacion instalada */
 @media (display-mode: standalone){ .barra{padding-top:max(14px,env(safe-area-inset-top))} }
+
+.clave-caja{position:relative}
+.clave-caja input{width:100%;padding-right:50px}
+.ver-clave{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;font-size:20px;cursor:pointer;padding:6px}
+.rejilla select{width:100%;padding:12px 11px;border:1px solid var(--borde);border-radius:8px;font-size:17px;background:#fff}
+.rejilla select:disabled{background:#f3f6f4;color:var(--gris)}
+.guardado{margin:4px 0 -4px;text-align:center;font-size:13px;color:var(--gris);min-height:1.2em}
+.cab-motivo{display:inline-block;margin-bottom:6px;padding:3px 10px;border-radius:999px;background:var(--ambar);color:#3b2a00;font-size:12px;font-weight:800;letter-spacing:.3px}

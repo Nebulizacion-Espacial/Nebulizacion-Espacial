@@ -191,6 +191,7 @@
       <button class="sub activa" data-sub="revisar">Planillas por revisar <b id="cuentaRevisar"></b></button>
       <button class="sub" data-sub="tareas">Tareas</button>
       <button class="sub" data-sub="personal">Fumigadores</button>
+      <button class="sub" data-sub="listas">Listas</button>
       <button class="btn btn-claro btn-mini" id="btnFumActualizar" style="margin-left:auto">&#8635; Actualizar</button>
     </nav>
     <p class="nota" id="fumSinRed" hidden>&#128244; Esta secci&#243;n necesita internet.</p>
@@ -212,6 +213,7 @@
           <div><label for="tMICRORED">Microred</label><input id="tMICRORED"></div>
           <div class="doble"><label for="tZONA">Localidad / zona / sector</label><input id="tZONA" list="lZonaTarea" placeholder="Ej. CERCO 2 - SECTOR III" required><datalist id="lZonaTarea"></datalist></div>
           <div><label for="tVUELTA">Vuelta</label><select id="tVUELTA" required><option value="">Elegir</option><option>I</option><option>II</option><option>III</option><option>IV</option></select></div>
+          <div><label for="tMOTIVO">Control de</label><select id="tMOTIVO" required></select></div>
           <div><label for="tVIV_PRO">Viviendas programadas</label><input type="number" min="1" id="tVIV_PRO" required></div>
           <div><label for="tMZ_PRO">Manzanas programadas</label><input type="number" min="0" id="tMZ_PRO"></div>
           <div class="doble"><label for="tJEFE_BRIGADA">Jefe de brigada</label><input id="tJEFE_BRIGADA"></div>
@@ -239,7 +241,7 @@
     <!-- FUMIGADORES -->
     <section id="sub-personal" hidden>
       <div class="bloque enlace-fum">
-        <div><b>Enlace para los fumigadores</b><br><span class="nota">Comp&#225;rtelo por WhatsApp. Cada uno entra con su usuario y PIN.</span></div>
+        <div><b>Enlace para los fumigadores</b><br><span class="nota">Comp&#225;rtelo por WhatsApp. Cada uno entra con su DNI; la primera vez la contrase&#241;a tambi&#233;n es su DNI y el sistema le pide cambiarla.</span></div>
         <code id="enlaceFum"></code>
         <button type="button" class="btn btn-claro btn-mini" id="btnCopiarEnlace">Copiar enlace</button>
       </div>
@@ -247,10 +249,10 @@
         <div class="bloque-cab"><h2 id="tituloFum">Nuevo fumigador</h2></div>
         <div class="rejilla">
           <div class="doble"><label for="fNOMBRE">Nombres y apellidos</label><input id="fNOMBRE" required></div>
-          <div><label for="fUSUARIO">Usuario (ej. DNI)</label><input id="fUSUARIO" required></div>
-          <div><label for="fPIN">PIN (4 a 6 n&#250;meros)</label><input id="fPIN" inputmode="numeric" maxlength="6" placeholder="Nuevo PIN"></div>
+          <div><label for="fUSUARIO">DNI (ser&#225; su usuario)</label><input id="fUSUARIO" inputmode="numeric" maxlength="8" required></div>
           <div><label for="fACTIVO">Estado</label><select id="fACTIVO"><option value="SI">Activo</option><option value="NO">Desactivado</option></select></div>
         </div>
+        <label class="check-fum" id="cajaRestablecer" hidden><input type="checkbox" id="fRESTABLECER"> Restablecer contrase&#241;a (vuelve a ser su DNI y deber&#225; cambiarla al ingresar)</label>
         <p class="nota" id="notaPin"></p>
         <p id="fumError" class="error" role="alert"></p>
         <div class="botones">
@@ -262,6 +264,24 @@
         <div class="bloque-cab"><h2>Fumigadores registrados</h2></div>
         <div class="tabla-envoltura"><table id="tablaFum"></table></div>
       </section>
+    </section>
+
+    <!-- LISTAS (insecticidas y "Control de") -->
+    <section id="sub-listas" hidden>
+      <div class="listas-grid">
+        <section class="bloque">
+          <div class="bloque-cab"><h2>Insecticidas</h2></div>
+          <p class="nota">Los fumigadores eligen de esta lista. El primero sale marcado por defecto.</p>
+          <ul class="lista-edit" id="listaInsect"></ul>
+          <div class="agregar-item"><input id="nuevoInsect" placeholder="Ej. CIPERMETRINA 25 EC"><button type="button" class="btn btn-primario btn-mini" data-agregar="insecticidas">Agregar</button></div>
+        </section>
+        <section class="bloque">
+          <div class="bloque-cab"><h2>Control de</h2></div>
+          <p class="nota">Motivo de la nebulizaci&#243;n que eliges al crear cada tarea.</p>
+          <ul class="lista-edit" id="listaMotivos"></ul>
+          <div class="agregar-item"><input id="nuevoMotivo" placeholder="Ej. CONTROL FOCAL"><button type="button" class="btn btn-primario btn-mini" data-agregar="motivos">Agregar</button></div>
+        </section>
+      </div>
     </section>
   </main>
 

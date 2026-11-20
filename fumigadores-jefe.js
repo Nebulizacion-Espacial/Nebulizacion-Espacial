@@ -5,7 +5,7 @@
    - Revisa las planillas casa por casa y aprueba: pasa al consolidado (REGISTROS).
    Usa las funciones de script.js: api, $, esc, avisar, cargando, fmt, fechaCorta, recargar.
    ========================================================= */
-var JF = { fumigadores: [], tareas: [], planillas: [], cargado: false, sub: 'revisar', editTarea: null, editFum: null, proManual: false, mzManual: false };
+var JF = { listas: { insecticidas: ['MALATHION 57 EC'], motivos: ['CONTROL DE BROTE', 'CERCO'] }, fumigadores: [], tareas: [], planillas: [], cargado: false, sub: 'revisar', editTarea: null, editFum: null, proManual: false, mzManual: false };
 var JF_COND = { NEB_FRIO: 'En frío', NEB_CALIENTE: 'Caliente', CERRADA: 'Cerrada', RENUENTE: 'Renuente', DESHABITADA: 'Deshabitada' };
 var JF_EST = { BORRADOR: 'En proceso', ENVIADA: 'Enviada', APROBADA: 'Aprobada', DEVUELTA: 'Devuelta' };
 
@@ -34,6 +34,7 @@ async function jfCargar(silencioso) {
   try {
     var j = await api('jfListar');
     JF.fumigadores = j.fumigadores || []; JF.tareas = j.tareas || []; JF.planillas = j.planillas || [];
+    if (j.listas) JF.listas = j.listas;
     JF.cargado = true;
     jfPintar();
   } catch (e) {
@@ -47,13 +48,13 @@ function jfPintar() {
   var porRevisar = JF.planillas.filter(function (p) { return p.ESTADO === 'ENVIADA'; }).length;
   $('badgeFum').textContent = porRevisar; $('badgeFum').hidden = !porRevisar;
   $('cuentaRevisar').textContent = porRevisar ? '(' + porRevisar + ')' : '';
-  jfPintarRevisar(); jfPintarTareas(); jfPintarFum(); jfPintarChecks();
+  jfPintarRevisar(); jfPintarTareas(); jfPintarFum(); jfPintarChecks(); jfPintarListas(); jfOpcionesMotivo();
 }
 
 function jfSub(s) {
   JF.sub = s;
   document.querySelectorAll('#subFum .sub').forEach(function (b) { b.classList.toggle('activa', b.dataset.sub === s); });
-  ['revisar', 'tareas', 'personal'].forEach(function (x) { $('sub-' + x).hidden = x !== s; });
+  ['revisar', 'tareas', 'personal', 'listas'].forEach(function (x) { $('sub-' + x).hidden = x !== s; });
 }
 
 /* ---------- POR REVISAR ---------- */
@@ -85,7 +86,7 @@ function jfPintarRevisar() {
     var hayEnviadas = listas.length > 0;
     return '<section class="bloque tarea-rev">' +
       '<div class="bloque-cab"><div><h2>' + esc(t.ZONA) + ' &#183; Vuelta ' + esc(t.VUELTA) + '</h2>' +
-      '<span class="nota">' + fechaCorta(t.FECHA) + ' &#183; ' + esc(t.ESTABLECIMIENTO) + ' &#183; ' + esc(t.DISTRITO) + (t.JEFE_BRIGADA ? ' &#183; J. brigada: ' + esc(t.JEFE_BRIGADA) : '') + '</span></div>' +
+      '<span class="nota">' + (t.MOTIVO ? '<b>' + esc(t.MOTIVO) + '</b> &#183; ' : '') + fechaCorta(t.FECHA) + ' &#183; ' + esc(t.ESTABLECIMIENTO) + ' &#183; ' + esc(t.DISTRITO) + (t.JEFE_BRIGADA ? ' &#183; J. brigada: ' + esc(t.JEFE_BRIGADA) : '') + '</span></div>' +
       '<button class="btn btn-primario" data-aprobar="' + esc(t.ID) + '"' + (hayEnviadas ? '' : ' disabled title="Ning&#250;n fumigador ha enviado su planilla"') + '>&#10004; Aprobar y pasar al consolidado</button></div>' +
       '<div class="resumen-tarea">' +
       '<span>Programadas <b>' + fmt(pro) + '</b></span><span>Nebulizadas <b>' + fmt(s.neb) + '</b> (' + cob + ')</span>' +
@@ -147,7 +148,7 @@ function jfVerPlanilla(id) {
     '<span><b>Provincia:</b> ' + esc(t.PROVINCIA) + '</span><span><b>Microred:</b> ' + esc(t.MICRORED || '-') + '</span>' +
     '<span><b>Distrito:</b> ' + esc(t.DISTRITO) + '</span><span><b>Establecimiento:</b> ' + esc(t.ESTABLECIMIENTO) + '</span>' +
     '<span><b>Localidad:</b> ' + esc(t.ZONA) + '</span><span><b>Fecha:</b> ' + fechaCorta(t.FECHA) + '</span>' +
-    '<span><b>Vuelta:</b> ' + esc(t.VUELTA) + '</span><span><b>Estado:</b> ' + (JF_EST[p.ESTADO] || p.ESTADO) + (p.ENVIADO ? ' (' + esc(p.ENVIADO) + ')' : '') + '</span>' +
+    '<span><b>Control de:</b> ' + esc(t.MOTIVO || '-') + '</span><span><b>Vuelta:</b> ' + esc(t.VUELTA) + '</span><span><b>Estado:</b> ' + (JF_EST[p.ESTADO] || p.ESTADO) + (p.ENVIADO ? ' (' + esc(p.ENVIADO) + ')' : '') + '</span>' +
     '</div>' +
     '<div class="tabla-envoltura"><table class="tabla-formato"><thead>' +
     '<tr><th rowspan="2">N&#176;</th><th rowspan="2">Sector</th><th rowspan="2">N&#176; Mz</th><th rowspan="2">Direcci&#243;n / Jefe de familia</th><th rowspan="2" class="num">Resid.</th><th colspan="2">Nebulizada</th><th rowspan="2">Cerrada</th><th rowspan="2">Renuente</th><th rowspan="2">Deshab.</th><th rowspan="2">Hora</th></tr>' +
@@ -178,6 +179,7 @@ function jfLimpiarTarea() {
   $('formTarea').reset(); $('tareaError').textContent = '';
   $('tFECHA').value = hoyISO();
   $('tJEFE_BRIGADA').value = localStorage.getItem('jf_jefe') || '';
+  jfOpcionesMotivo(); $('tMOTIVO').value = localStorage.getItem('jf_motivo') || '';
   $('tituloTarea').textContent = 'Nueva tarea para fumigadores'; $('idTarea').textContent = '';
   $('btnTareaGuardar').textContent = 'Crear tarea';
   JF.proManual = false; JF.mzManual = false;
@@ -187,7 +189,7 @@ function jfLimpiarTarea() {
 function jfEditarTarea(id) {
   var t = JF.tareas.filter(function (x) { return x.ID === id; })[0]; if (!t) return;
   JF.editTarea = t;
-  ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'MICRORED', 'ZONA', 'VUELTA', 'VIV_PRO', 'MZ_PRO', 'JEFE_BRIGADA', 'OBSERVACIONES'].forEach(function (c) { $('t' + c).value = t[c] || ''; });
+  ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'MICRORED', 'ZONA', 'VUELTA', 'MOTIVO', 'VIV_PRO', 'MZ_PRO', 'JEFE_BRIGADA', 'OBSERVACIONES'].forEach(function (c) { $('t' + c).value = t[c] || ''; });
   $('tituloTarea').textContent = 'Editar tarea'; $('idTarea').textContent = t.ESTADO === 'APROBADA' ? 'Ya aprobada: al guardar se actualiza el consolidado' : '';
   $('btnTareaGuardar').textContent = 'Guardar cambios';
   JF.proManual = true; JF.mzManual = true;
@@ -197,16 +199,17 @@ function jfEditarTarea(id) {
 async function jfGuardarTarea(ev) {
   ev.preventDefault();
   var o = { ID: JF.editTarea ? JF.editTarea.ID : '' };
-  ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'MICRORED', 'ZONA', 'VUELTA', 'VIV_PRO', 'MZ_PRO', 'JEFE_BRIGADA', 'OBSERVACIONES'].forEach(function (c) { o[c] = $('t' + c).value.trim(); });
+  ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'MICRORED', 'ZONA', 'VUELTA', 'MOTIVO', 'VIV_PRO', 'MZ_PRO', 'JEFE_BRIGADA', 'OBSERVACIONES'].forEach(function (c) { o[c] = $('t' + c).value.trim(); });
   o.FUMIGADORES = Array.prototype.map.call(document.querySelectorAll('#checksFum input:checked'), function (c) { return c.value; });
-  var falta = ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA'].filter(function (c) { return !o[c]; });
-  if (falta.length || !(Number(o.VIV_PRO) > 0)) { $('tareaError').textContent = 'Completa fecha, distrito, establecimiento, zona, vuelta y viviendas programadas.'; return; }
+  var falta = ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA', 'MOTIVO'].filter(function (c) { return !o[c]; });
+  if (falta.length || !(Number(o.VIV_PRO) > 0)) { $('tareaError').textContent = 'Completa fecha, distrito, establecimiento, zona, vuelta, "control de" y viviendas programadas.'; return; }
   $('tareaError').textContent = '';
   var eraAprobada = JF.editTarea && JF.editTarea.ESTADO === 'APROBADA';
   cargando(true);
   try {
     var j = await api('jfGuardarTarea', { tarea: o });
     if (o.JEFE_BRIGADA) localStorage.setItem('jf_jefe', o.JEFE_BRIGADA);
+    localStorage.setItem('jf_motivo', o.MOTIVO);
     if (eraAprobada) { await api('jfAprobar', { id: j.tarea.ID, forzar: true }); await recargar(); }
     avisar(o.ID ? 'Tarea actualizada.' : 'Tarea creada. Los fumigadores ya la ven en su celular.');
     jfLimpiarTarea();
@@ -235,7 +238,7 @@ function jfPintarTareas() {
       var asign = String(t.FUMIGADORES || '').split(',').filter(String);
       var vis = s.neb + s.cer + s.ren + s.desh, pro = jfNum(t.VIV_PRO);
       var borrable = !plas.some(function (p) { return (p.VIVIENDAS || []).length; });
-      return '<tr><td>' + fechaCorta(t.FECHA) + '</td><td><b>' + esc(t.ZONA) + '</b></td><td>' + esc(t.VUELTA) + '</td><td>' + esc(t.ESTABLECIMIENTO) + '<br><span class="nota">' + esc(t.DISTRITO) + '</span></td>' +
+      return '<tr><td>' + fechaCorta(t.FECHA) + '</td><td><b>' + esc(t.ZONA) + '</b>' + (t.MOTIVO ? '<br><span class="nota">' + esc(t.MOTIVO) + '</span>' : '') + '</td><td>' + esc(t.VUELTA) + '</td><td>' + esc(t.ESTABLECIMIENTO) + '<br><span class="nota">' + esc(t.DISTRITO) + '</span></td>' +
         '<td class="num">' + fmt(pro) + '</td><td>' + (asign.length ? asign.map(jfFumNombre).map(esc).join('<br>') : '<span class="nota">Todos</span>') + '</td>' +
         '<td>' + env + ' enviada' + (env === 1 ? '' : 's') + ' de ' + plas.length + '</td>' +
         '<td class="num">' + vis + (pro ? ' <span class="nota">(' + Math.round(vis / pro * 100) + '%)</span>' : '') + '</td>' +
@@ -288,43 +291,71 @@ function jfListaZonas() {
   $('lZonaTarea').innerHTML = zonas.map(function (z) { return '<option value="' + esc(z) + '">'; }).join('');
 }
 
+/* ---------- LISTAS: insecticidas y "Control de" ---------- */
+function jfOpcionesMotivo() {
+  var sel = $('tMOTIVO'), actual = sel.value || (JF.editTarea ? JF.editTarea.MOTIVO : '');
+  var ops = JF.listas.motivos.slice();
+  if (actual && ops.indexOf(actual) < 0) ops.push(actual);
+  sel.innerHTML = '<option value="">Elegir</option>' + ops.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('');
+  sel.value = actual;
+}
+function jfPintarListas() {
+  function pinta(id, arr, tipo) {
+    $(id).innerHTML = arr.map(function (x, i) {
+      return '<li><span>' + (i === 0 && tipo === 'insecticidas' ? '&#11088; ' : '') + esc(x) + '</span>' +
+        (i > 0 && tipo === 'insecticidas' ? '<button type="button" class="btn btn-claro btn-mini" data-principal="' + i + '">Poner primero</button>' : '') +
+        '<button type="button" class="btn btn-peligro btn-mini" data-quitar="' + tipo + '|' + i + '">Quitar</button></li>';
+    }).join('');
+  }
+  pinta('listaInsect', JF.listas.insecticidas, 'insecticidas');
+  pinta('listaMotivos', JF.listas.motivos, 'motivos');
+}
+async function jfGuardarListas(nuevas) {
+  cargando(true);
+  try { var j = await api('jfGuardarListas', { listas: nuevas }); JF.listas = j.listas; jfPintarListas(); jfOpcionesMotivo(); avisar('Lista guardada. Los fumigadores la ven al actualizar.'); }
+  catch (e) { avisar(e.message, true); }
+  cargando(false);
+}
+
 /* ---------- FUMIGADORES ---------- */
 function jfPintarFum() {
   var lista = JF.fumigadores.slice().sort(function (a, b) { return a.NOMBRE.localeCompare(b.NOMBRE); });
   if (!lista.length) { $('tablaFum').innerHTML = '<tr><td class="nota">A&#250;n no hay fumigadores registrados.</td></tr>'; return; }
-  $('tablaFum').innerHTML = '<thead><tr><th>Nombre</th><th>Usuario</th><th>Estado</th><th class="num">Planillas</th><th class="num">Viviendas registradas</th><th></th></tr></thead><tbody>' +
+  $('tablaFum').innerHTML = '<thead><tr><th>Nombre</th><th>DNI (usuario)</th><th>Estado</th><th class="num">Planillas</th><th class="num">Viviendas registradas</th><th></th></tr></thead><tbody>' +
     lista.map(function (f) {
       var plas = JF.planillas.filter(function (p) { return p.FUMIGADOR_ID === f.ID; }), s = jfSuma(plas);
       return '<tr><td><b>' + esc(f.NOMBRE) + '</b></td><td><code>' + esc(f.USUARIO) + '</code></td>' +
-        '<td><span class="est-fum ' + (f.ACTIVO === 'NO' ? 'e-DEVUELTA">Desactivado' : 'e-APROBADA">Activo') + '</span></td>' +
+        '<td><span class="est-fum ' + (f.ACTIVO === 'NO' ? 'e-DEVUELTA">Desactivado' : 'e-APROBADA">Activo') + '</span>' +
+        (f.CAMBIAR_CLAVE === 'SI' ? '<br><span class="nota">A&#250;n no cambia su contrase&#241;a</span>' : '') + '</td>' +
         '<td class="num">' + plas.length + '</td><td class="num">' + s.viv + '</td>' +
-        '<td class="acc"><button class="btn btn-claro btn-mini" data-editar-fum="' + esc(f.ID) + '">Editar / cambiar PIN</button></td></tr>';
+        '<td class="acc"><button class="btn btn-claro btn-mini" data-editar-fum="' + esc(f.ID) + '">Editar</button></td></tr>';
     }).join('') + '</tbody>';
 }
 
 function jfLimpiarFum() {
   JF.editFum = null; $('formFum').reset(); $('fumError').textContent = '';
-  $('tituloFum').textContent = 'Nuevo fumigador'; $('notaPin').textContent = 'El PIN es la clave del fumigador. Entrégaselo en persona.';
-  $('fPIN').placeholder = 'Ej. 4821';
+  $('tituloFum').textContent = 'Nuevo fumigador'; $('cajaRestablecer').hidden = true;
+  $('notaPin').textContent = 'Su usuario será el DNI y su contraseña inicial también el DNI. En el primer ingreso el sistema le pedirá crear su propia contraseña.';
 }
 function jfEditarFum(id) {
   var f = JF.fumigadores.filter(function (x) { return x.ID === id; })[0]; if (!f) return;
   JF.editFum = f;
-  $('fNOMBRE').value = f.NOMBRE; $('fUSUARIO').value = f.USUARIO; $('fACTIVO').value = f.ACTIVO === 'NO' ? 'NO' : 'SI'; $('fPIN').value = '';
-  $('tituloFum').textContent = 'Editar fumigador'; $('notaPin').textContent = 'Deja el PIN vacío para mantener el actual. Escribe uno nuevo si lo olvidó.';
-  $('fPIN').placeholder = 'Sin cambios';
+  $('fNOMBRE').value = f.NOMBRE; $('fUSUARIO').value = f.USUARIO; $('fACTIVO').value = f.ACTIVO === 'NO' ? 'NO' : 'SI';
+  $('fRESTABLECER').checked = false; $('cajaRestablecer').hidden = false;
+  $('tituloFum').textContent = 'Editar fumigador';
+  $('notaPin').textContent = 'Si olvidó su contraseña, marca "Restablecer contraseña". Si cambias el DNI, la contraseña vuelve a ser el nuevo DNI.';
   $('formFum').scrollIntoView({ behavior: 'smooth' });
 }
 async function jfGuardarFum(ev) {
   ev.preventDefault();
-  var o = { ID: JF.editFum ? JF.editFum.ID : '', NOMBRE: $('fNOMBRE').value.trim(), USUARIO: $('fUSUARIO').value.trim(), PIN: $('fPIN').value.trim(), ACTIVO: $('fACTIVO').value };
-  if (!o.NOMBRE || !o.USUARIO) { $('fumError').textContent = 'Escribe el nombre y el usuario.'; return; }
-  if (o.PIN && !/^\d{4,6}$/.test(o.PIN)) { $('fumError').textContent = 'El PIN debe tener de 4 a 6 números.'; return; }
-  if (!o.ID && !o.PIN) { $('fumError').textContent = 'Asigna un PIN de 4 a 6 números.'; return; }
+  var o = { ID: JF.editFum ? JF.editFum.ID : '', NOMBRE: $('fNOMBRE').value.trim(), USUARIO: $('fUSUARIO').value.replace(/\D/g, ''), ACTIVO: $('fACTIVO').value, RESTABLECER: $('fRESTABLECER').checked };
+  if (!o.NOMBRE) { $('fumError').textContent = 'Escribe los nombres y apellidos.'; return; }
+  if (!/^\d{8}$/.test(o.USUARIO)) { $('fumError').textContent = 'El DNI debe tener 8 números.'; return; }
   cargando(true);
   try {
-    await api('jfGuardarFumigador', { fumigador: o });
-    avisar(o.ID ? 'Fumigador actualizado.' : 'Fumigador registrado. Usuario: ' + o.USUARIO.toUpperCase() + (o.PIN ? ' · PIN: ' + o.PIN : ''));
+    var j = await api('jfGuardarFumigador', { fumigador: o });
+    avisar(!o.ID ? 'Fumigador registrado. Usuario y contraseña inicial: ' + o.USUARIO :
+      j.restablecida ? 'Contraseña restablecida: ahora es su DNI (' + o.USUARIO + ').' : 'Fumigador actualizado.', false);
     jfLimpiarFum(); await jfCargar(true);
   } catch (e) { $('fumError').textContent = e.message; }
   cargando(false);
@@ -380,7 +411,7 @@ document.addEventListener('DOMContentLoaded', function () {
   $('filtroTareas').addEventListener('change', jfPintarTareas);
   $('formFum').addEventListener('submit', jfGuardarFum);
   $('btnFumCancelar').addEventListener('click', jfLimpiarFum);
-  $('fPIN').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 6); });
+  $('fUSUARIO').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 8); });
   $('btnCerrarModal').addEventListener('click', function () { $('modalPlanilla').hidden = true; });
   $('modalPlanilla').addEventListener('click', function (e) { if (e.target === this) this.hidden = true; });
   $('btnImprimirPlanilla').addEventListener('click', function () { document.body.classList.add('imprimiendo-planilla'); window.print(); document.body.classList.remove('imprimiendo-planilla'); });
@@ -391,5 +422,25 @@ document.addEventListener('DOMContentLoaded', function () {
   $('btnCopiarEnlace').addEventListener('click', function () {
     (navigator.clipboard ? navigator.clipboard.writeText(enlace) : Promise.reject()).then(function () { avisar('Enlace copiado.'); }, function () { prompt('Copia este enlace:', enlace); });
   });
-  jfLimpiarFum(); jfLimpiarTarea();
+  $('sub-listas').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var l = { insecticidas: JF.listas.insecticidas.slice(), motivos: JF.listas.motivos.slice() };
+    if (b.dataset.agregar) {
+      var inp = b.dataset.agregar === 'insecticidas' ? $('nuevoInsect') : $('nuevoMotivo'), v = inp.value.trim().toUpperCase();
+      if (!v) { inp.focus(); return; }
+      if (l[b.dataset.agregar].indexOf(v) >= 0) { avisar('Ya est\u00e1 en la lista.', true); return; }
+      l[b.dataset.agregar].push(v); inp.value = '';
+    }
+    if (b.dataset.quitar) {
+      var x = b.dataset.quitar.split('|');
+      if (!confirm('\u00bfQuitar ' + l[x[0]][x[1]] + ' de la lista? Lo ya registrado no cambia.')) return;
+      l[x[0]].splice(Number(x[1]), 1);
+    }
+    if (b.dataset.principal) { var i = Number(b.dataset.principal); l.insecticidas.unshift(l.insecticidas.splice(i, 1)[0]); }
+    jfGuardarListas(l);
+  });
+  ['nuevoInsect', 'nuevoMotivo'].forEach(function (id) {
+    $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); this.nextElementSibling.click(); } });
+  });
+  jfLimpiarFum(); jfLimpiarTarea(); jfPintarListas();
 });

@@ -25,17 +25,33 @@
     <img src="logo.png" alt="" onerror="this.style.display='none'">
     <h1>Planilla del fumigador</h1>
     <p class="sub">Nebulizaci&#243;n espacial de viviendas con equipo port&#225;til</p>
-    <label for="usuario">Usuario</label>
-    <input id="usuario" autocomplete="username" autocapitalize="characters" placeholder="Tu DNI o usuario" required>
-    <label for="pin">PIN</label>
-    <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="&#8226;&#8226;&#8226;&#8226;" required>
+    <label for="usuario">DNI</label>
+    <input id="usuario" inputmode="numeric" maxlength="8" autocomplete="username" placeholder="Tu DNI" required>
+    <label for="pin">Contrase&#241;a</label>
+    <div class="clave-caja"><input id="pin" type="password" maxlength="30" autocomplete="current-password" placeholder="La primera vez es tu DNI" required><button type="button" class="ver-clave" data-ver="pin" aria-label="Mostrar contrase&#241;a">&#128065;</button></div>
     <button type="submit" class="btn btn-primario btn-grande" id="btnLogin">Ingresar</button>
     <p id="loginError" class="error" role="alert"></p>
-    <p class="nota">Tu usuario y PIN te los da el jefe de brigada.</p>
+    <p class="nota">La primera vez tu contrase&#241;a es tu DNI; luego el sistema te pedir&#225; crear una propia.</p>
     <div class="instalar" id="cajaInstalar" hidden>
       <button type="button" class="btn btn-claro btn-ancho" id="btnInstalar">&#128242; Instalar la aplicaci&#243;n en este celular</button>
       <p class="nota" id="ayudaInstalar"></p>
     </div>
+  </form>
+</section>
+
+<!-- ============ CAMBIAR CONTRASEÑA (primer ingreso) ============ -->
+<section id="vCambiar" class="login" hidden>
+  <form id="formCambiar" class="login-caja">
+    <img src="logo.png" alt="" onerror="this.style.display='none'">
+    <h1>Crea tu contrase&#241;a</h1>
+    <p class="sub" id="saludoCambiar">Es tu primer ingreso. Por seguridad cambia la contrase&#241;a (ahora es tu DNI).</p>
+    <label for="claveNueva">Nueva contrase&#241;a (m&#237;nimo 6 caracteres)</label>
+    <div class="clave-caja"><input id="claveNueva" type="password" maxlength="30" autocomplete="new-password" required><button type="button" class="ver-clave" data-ver="claveNueva" aria-label="Mostrar">&#128065;</button></div>
+    <label for="claveNueva2">Rep&#237;tela</label>
+    <input id="claveNueva2" type="password" maxlength="30" autocomplete="new-password" required>
+    <button type="submit" class="btn btn-primario btn-grande" id="btnCambiar">Guardar contrase&#241;a</button>
+    <p id="cambiarError" class="error" role="alert"></p>
+    <p class="nota">No la compartas. Si la olvidas, tu jefe de brigada puede restablecerla.</p>
   </form>
 </section>
 
@@ -70,11 +86,10 @@
       <summary>Equipo e insecticida <small id="resumenDatos"></small></summary>
       <div class="rejilla">
         <div class="ancho"><label for="pFum2">Fumigador 2 (compa&#241;ero, opcional)</label><input id="pFum2" autocapitalize="characters"></div>
-        <div class="ancho"><label for="pInsecticida">Nombre del insecticida</label><input id="pInsecticida" autocapitalize="characters" list="lInsect"></div>
+        <div class="ancho"><label for="pInsecticida">Nombre del insecticida</label><select id="pInsecticida"></select></div>
         <div><label for="pTipo">Tipo</label><input id="pTipo" autocapitalize="characters" placeholder="Ej. CE, EW"></div>
         <div><label for="pConc">Concentraci&#243;n final</label><input id="pConc" placeholder="Ej. 2%"></div>
       </div>
-      <datalist id="lInsect"></datalist>
     </details>
 
     <!-- AGREGAR VIVIENDA -->
@@ -110,6 +125,8 @@
       <div id="listaViviendas"></div>
     </section>
 
+    <div class="guardado" id="estadoGuardado"></div>
+    <button class="btn btn-claro btn-grande btn-ancho" id="btnGuardarAvance">&#128190; Guardar avance</button>
     <button class="btn btn-primario btn-grande btn-ancho" id="btnEnviar">&#10004; Terminar y enviar al jefe</button>
     <div class="espacio-totales"></div>
   </main>

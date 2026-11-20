@@ -57,3 +57,10 @@ td.acc{white-space:nowrap;text-align:right}
 
 .aviso-vuelta{margin:14px 0 0;padding:10px 14px;border-radius:8px;font-size:.92rem;line-height:1.45;border:1px solid #f0d48a;background:#fff7e0;color:#5c4300}
 .aviso-vuelta.ok{border-color:#9fd1b0;background:#e8f5ec;color:#14532d}
+
+.listas-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.lista-edit{list-style:none;margin:10px 0;padding:0}
+.lista-edit li{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #e6ece8}
+.lista-edit li span{flex:1;font-weight:600}
+.agregar-item{display:flex;gap:8px}
+.agregar-item input{flex:1;padding:8px 10px;border:1px solid var(--borde);border-radius:6px}

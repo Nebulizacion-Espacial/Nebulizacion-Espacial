@@ -34,7 +34,9 @@ var CFG_DEFECTO = [
   ['GAL_PETROLEO_POR_VIV', 0.02642, 'galones de petr\u00f3leo por vivienda programada'],
   ['GAL_GASOLINA_POR_VIV', 0.021136, 'galones de gasolina por vivienda programada'],
   ['PROVINCIA_DEFECTO', 'SAN MARTIN', 'Provincia que aparece por defecto en el formulario'],
-  ['UNGETS_DEFECTO', 'SAN MARTIN', 'UNGETS que aparece por defecto en el formulario']
+  ['UNGETS_DEFECTO', 'SAN MARTIN', 'UNGETS que aparece por defecto en el formulario'],
+  ['INSECTICIDAS', 'MALATHION 57 EC', 'Insecticidas que eligen los fumigadores, separados por | (se editan desde la pesta\u00f1a Fumigadores > Listas)'],
+  ['MOTIVOS', 'CONTROL DE BROTE|CERCO', 'Opciones de "Control de" de las tareas, separadas por |']
 ];
 
 function instalar() {
@@ -269,9 +271,11 @@ function importar(lista) {
      (o actualiza) la fila del consolidado en REGISTROS.
    ===================================================================== */
 var HOJA_FUM = 'FUMIGADORES', HOJA_TAR = 'TAREAS', HOJA_PLA = 'PLANILLAS', HOJA_VIV = 'VIVIENDAS';
-var COLS_FUM = ['ID', 'USUARIO', 'NOMBRE', 'PIN_HASH', 'ACTIVO', 'CREADO'];
+var COLS_FUM = ['ID', 'USUARIO', 'NOMBRE', 'PIN_HASH', 'ACTIVO', 'CREADO', 'CAMBIAR_CLAVE'];
+// USUARIO = DNI. PIN_HASH = contrase\u00f1a cifrada (al crearlo es su DNI). CAMBIAR_CLAVE = SI obliga a cambiarla al ingresar.
 var COLS_TAR = ['ID', 'FECHA', 'PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'MICRORED', 'ZONA', 'VUELTA',
-  'VIV_PRO', 'MZ_PRO', 'JEFE_BRIGADA', 'FUMIGADORES', 'ESTADO', 'REGISTRO_ID', 'OBSERVACIONES', 'CREADO', 'MODIFICADO'];
+  'VIV_PRO', 'MZ_PRO', 'JEFE_BRIGADA', 'FUMIGADORES', 'ESTADO', 'REGISTRO_ID', 'OBSERVACIONES', 'CREADO', 'MODIFICADO',
+  'MOTIVO']; // MOTIVO = "Control de" (control de brote, cerco...). Va al final para no mover columnas ya creadas.
 var COLS_PLA = ['ID', 'TAREA_ID', 'FUMIGADOR_ID', 'FUMIGADOR', 'FUMIGADOR_2', 'INSECTICIDA', 'TIPO_INSECTICIDA', 'CONCENTRACION',
   'ESTADO', 'NOTA_JEFE', 'TOTAL_VIV', 'NEB_FRIO', 'NEB_CALIENTE', 'CERRADAS', 'RENUENTES', 'DESHABITADAS', 'RESIDENTES',
   'MANZANAS', 'VIVIENDAS_JSON', 'CREADO', 'ENVIADO', 'MODIFICADO'];
@@ -290,6 +294,38 @@ function instalarFumigadores() {
     h.setFrozenRows(1);
     h.getRange(2, 1, Math.max(h.getMaxRows() - 1, 1), x[1].length).setNumberFormat('@'); // todo como texto
   });
+}
+
+/* ---------- listas configurables (insecticidas y "control de") ---------- */
+function leerListas() {
+  var cfg = leerConfig();
+  function lista(v, def) {
+    var l = String(v === undefined || v === null || v === '' ? def : v).split('|').map(function (x) { return txtF(x, 60).toUpperCase(); }).filter(String);
+    return l.filter(function (x, i) { return l.indexOf(x) === i; });
+  }
+  return { insecticidas: lista(cfg.INSECTICIDAS, 'MALATHION 57 EC'), motivos: lista(cfg.MOTIVOS, 'CONTROL DE BROTE|CERCO') };
+}
+function escribirConfig(clave, valor, descripcion) {
+  var h = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_CFG);
+  var n = h.getLastRow();
+  if (n > 1) {
+    var claves = h.getRange(2, 1, n - 1, 1).getValues();
+    for (var i = 0; i < claves.length; i++) if (claves[i][0] === clave) { h.getRange(i + 2, 2).setValue(valor); return; }
+  }
+  h.appendRow([clave, valor, descripcion || '']);
+}
+function jfGuardarListas(l) {
+  function limpia(arr) {
+    var out = [];
+    (arr || []).forEach(function (x) { x = txtF(x, 60).toUpperCase().replace(/\|/g, ' '); if (x && out.indexOf(x) < 0) out.push(x); });
+    return out;
+  }
+  var ins = limpia(l.insecticidas), mot = limpia(l.motivos);
+  if (!ins.length) return { ok: false, error: 'Debe quedar al menos un insecticida.' };
+  if (!mot.length) return { ok: false, error: 'Debe quedar al menos una opci\u00f3n de "Control de".' };
+  escribirConfig('INSECTICIDAS', ins.join('|'));
+  escribirConfig('MOTIVOS', mot.join('|'));
+  return { ok: true, listas: leerListas() };
 }
 
 /* ---------- utilidades de hojas ---------- */
@@ -331,6 +367,8 @@ function rutaFumigador(p) {
   c.put('f_' + p.token, fid, 43200); // 12 h, se renueva con el uso
   var fum = leerTabla(HOJA_FUM, COLS_FUM).filter(function (f) { return f.ID === fid; })[0];
   if (!fum || fum.ACTIVO === 'NO') return { ok: false, error: 'SESION' };
+  if (p.accion === 'fumCambiarClave') return conBloqueo(function () { return fumCambiarClave(fum, p); });
+  if (fum.CAMBIAR_CLAVE === 'SI' && p.accion !== 'fumSalir') return { ok: false, error: 'CAMBIAR_CLAVE' };
   switch (p.accion) {
     case 'fumDatos': return fumDatos(fum);
     case 'fumGuardar': return conBloqueo(function () { return fumGuardar(fum, p.planilla, !!p.enviar); });
@@ -340,17 +378,28 @@ function rutaFumigador(p) {
 }
 
 function fumLogin(p) {
-  var usuario = txtF(p.usuario, 30).toUpperCase(), pin = String(p.pin || '');
-  if (!usuario || !pin) return { ok: false, error: 'Escribe tu usuario y tu PIN.' };
+  var usuario = txtF(p.usuario, 30).toUpperCase().replace(/\s/g, ''), pin = String(p.pin || '');
+  if (!usuario || !pin) return { ok: false, error: 'Escribe tu DNI y tu contrase\u00f1a.' };
   var c = CacheService.getScriptCache(), k = 'fi_' + usuario, intentos = Number(c.get(k) || 0);
-  if (intentos >= 6) return { ok: false, error: 'Demasiados intentos. Espera 10 minutos o pide a tu jefe que revise tu PIN.' };
+  if (intentos >= 6) return { ok: false, error: 'Demasiados intentos. Espera 10 minutos o pide a tu jefe que restablezca tu contrase\u00f1a.' };
   var fum = leerTabla(HOJA_FUM, COLS_FUM).filter(function (f) { return f.USUARIO.toUpperCase() === usuario; })[0];
-  if (!fum || fum.PIN_HASH !== hashPin(usuario, pin)) { c.put(k, String(intentos + 1), 600); return { ok: false, error: 'Usuario o PIN incorrecto.' }; }
+  if (!fum || fum.PIN_HASH !== hashPin(usuario, pin)) { c.put(k, String(intentos + 1), 600); return { ok: false, error: 'DNI o contrase\u00f1a incorrecta.' }; }
   if (fum.ACTIVO === 'NO') return { ok: false, error: 'Tu usuario está desactivado. Habla con tu jefe de brigada.' };
   c.remove(k);
   var token = Utilities.getUuid();
   c.put('f_' + token, fum.ID, 43200);
-  return { ok: true, token: token, fumigador: { ID: fum.ID, NOMBRE: fum.NOMBRE, USUARIO: fum.USUARIO } };
+  return { ok: true, token: token, debeCambiar: fum.CAMBIAR_CLAVE === 'SI', fumigador: { ID: fum.ID, NOMBRE: fum.NOMBRE, USUARIO: fum.USUARIO } };
+}
+
+/* El fumigador cambia su contrase\u00f1a (obligatorio en el primer ingreso) */
+function fumCambiarClave(fum, p) {
+  var actual = String(p.actual || ''), nueva = String(p.nueva || '');
+  if (fum.PIN_HASH !== hashPin(fum.USUARIO, actual)) return { ok: false, error: 'La contrase\u00f1a actual no es correcta.' };
+  if (nueva.length < 6) return { ok: false, error: 'La nueva contrase\u00f1a debe tener al menos 6 caracteres.' };
+  if (nueva === fum.USUARIO) return { ok: false, error: 'La nueva contrase\u00f1a no puede ser tu DNI.' };
+  fum.PIN_HASH = hashPin(fum.USUARIO, nueva); fum.CAMBIAR_CLAVE = 'NO';
+  escribirFila(HOJA_FUM, COLS_FUM, fum);
+  return { ok: true };
 }
 
 function fumDatos(fum) {
@@ -366,6 +415,7 @@ function fumDatos(fum) {
   return {
     ok: true,
     fumigador: { ID: fum.ID, NOMBRE: fum.NOMBRE, USUARIO: fum.USUARIO },
+    listas: leerListas(),
     tareas: visibles,
     planillas: planillas.filter(function (pl) { return ids[pl.TAREA_ID]; }).map(function (pl) {
       var o = sinFila(pl); o.VIVIENDAS = JSON.parse(pl.VIVIENDAS_JSON || '[]'); delete o.VIVIENDAS_JSON; return o;
@@ -436,6 +486,7 @@ function fumDatosPlanilla(pl) { var o = sinFila(pl); o.VIVIENDAS = JSON.parse(pl
 function rutaJefe(p) {
   switch (p.accion) {
     case 'jfListar': return jfListar();
+    case 'jfGuardarListas': return conBloqueo(function () { return jfGuardarListas(p.listas || {}); });
     case 'jfGuardarFumigador': return conBloqueo(function () { return jfGuardarFumigador(p.fumigador || {}); });
     case 'jfGuardarTarea': return conBloqueo(function () { return jfGuardarTarea(p.tarea || {}); });
     case 'jfEliminarTarea': return conBloqueo(function () { return jfEliminarTarea(p.id); });
@@ -448,6 +499,7 @@ function rutaJefe(p) {
 function jfListar() {
   return {
     ok: true,
+    listas: leerListas(),
     fumigadores: leerTabla(HOJA_FUM, COLS_FUM).map(function (f) { var o = sinFila(f); o.TIENE_PIN = !!f.PIN_HASH; delete o.PIN_HASH; return o; }),
     tareas: leerTabla(HOJA_TAR, COLS_TAR).map(sinFila),
     planillas: leerTabla(HOJA_PLA, COLS_PLA).map(fumDatosPlanilla)
@@ -455,25 +507,23 @@ function jfListar() {
 }
 
 function jfGuardarFumigador(f) {
-  var usuario = txtF(f.USUARIO, 30).toUpperCase().replace(/\s/g, ''), nombre = txtF(f.NOMBRE, 80).toUpperCase();
-  if (!usuario || !nombre) return { ok: false, error: 'Escribe el usuario (ej. su DNI) y el nombre completo.' };
+  var dni = txtF(f.USUARIO, 12).replace(/\D/g, ''), nombre = txtF(f.NOMBRE, 80).toUpperCase();
+  if (!nombre) return { ok: false, error: 'Escribe los nombres y apellidos.' };
+  if (!/^\d{8}$/.test(dni)) return { ok: false, error: 'El DNI debe tener 8 n\u00fameros.' };
   var todos = leerTabla(HOJA_FUM, COLS_FUM);
-  if (todos.some(function (x) { return x.USUARIO.toUpperCase() === usuario && x.ID !== f.ID; })) return { ok: false, error: 'Ya existe otro fumigador con el usuario ' + usuario + '.' };
+  if (todos.some(function (x) { return x.USUARIO === dni && x.ID !== f.ID; })) return { ok: false, error: 'Ya existe otro fumigador con el DNI ' + dni + '.' };
   var o = f.ID ? todos.filter(function (x) { return x.ID === f.ID; })[0] : null;
-  if (f.ID && !o) return { ok: false, error: 'No se encontró el fumigador.' };
-  var pin = String(f.PIN || '');
-  if (pin && !/^\d{4,6}$/.test(pin)) return { ok: false, error: 'El PIN debe tener de 4 a 6 números.' };
-  if (!o && !pin) return { ok: false, error: 'Asigna un PIN de 4 a 6 números.' };
-  if (o && o.USUARIO !== usuario && !pin) return { ok: false, error: 'Si cambias el usuario, asigna también un PIN nuevo.' };
+  if (f.ID && !o) return { ok: false, error: 'No se encontr\u00f3 el fumigador.' };
+  var reiniciar = !o || o.USUARIO !== dni || !!f.RESTABLECER;
   o = o || { ID: idF('F'), CREADO: ahora() };
-  o.USUARIO = usuario; o.NOMBRE = nombre; o.ACTIVO = f.ACTIVO === 'NO' ? 'NO' : 'SI';
-  if (pin) o.PIN_HASH = hashPin(usuario, pin);
+  o.USUARIO = dni; o.NOMBRE = nombre; o.ACTIVO = f.ACTIVO === 'NO' ? 'NO' : 'SI';
+  if (reiniciar) { o.PIN_HASH = hashPin(dni, dni); o.CAMBIAR_CLAVE = 'SI'; } // contrase\u00f1a inicial = DNI
   escribirFila(HOJA_FUM, COLS_FUM, o);
   // Si se renombra, se actualiza el nombre en sus planillas
   var plas = leerTabla(HOJA_PLA, COLS_PLA).filter(function (pl) { return pl.FUMIGADOR_ID === o.ID && pl.FUMIGADOR !== o.NOMBRE; });
   plas.forEach(function (pl) { pl.FUMIGADOR = o.NOMBRE; escribirFila(HOJA_PLA, COLS_PLA, pl); });
-  var r = sinFila(o); r.TIENE_PIN = true; delete r.PIN_HASH;
-  return { ok: true, fumigador: r };
+  var r = sinFila(o); delete r.PIN_HASH;
+  return { ok: true, fumigador: r, restablecida: reiniciar };
 }
 
 function jfGuardarTarea(t) {
@@ -489,14 +539,15 @@ function jfGuardarTarea(t) {
   o.MICRORED = txtF(t.MICRORED, 60).toUpperCase();
   o.ZONA = txtF(t.ZONA, 150).toUpperCase();
   o.VUELTA = txtF(t.VUELTA, 5).toUpperCase();
+  o.MOTIVO = txtF(t.MOTIVO, 60).toUpperCase();
   o.VIV_PRO = Math.round(Number(t.VIV_PRO) || 0);
   o.MZ_PRO = t.MZ_PRO === '' || t.MZ_PRO === null || t.MZ_PRO === undefined ? '' : Math.round(Number(t.MZ_PRO) || 0);
   o.JEFE_BRIGADA = txtF(t.JEFE_BRIGADA, 80).toUpperCase();
   o.FUMIGADORES = (t.FUMIGADORES || []).map(String).join(',');
   o.OBSERVACIONES = txtF(t.OBSERVACIONES, 300);
   o.MODIFICADO = ahora();
-  var falta = ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA'].filter(function (c) { return !o[c]; });
-  if (falta.length) return { ok: false, error: 'Faltan datos: ' + falta.join(', ') };
+  var falta = ['FECHA', 'DISTRITO', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA', 'MOTIVO'].filter(function (c) { return !o[c]; });
+  if (falta.length) return { ok: false, error: 'Faltan datos: ' + falta.join(', ').replace('MOTIVO', 'CONTROL DE') };
   if (!(o.VIV_PRO > 0)) return { ok: false, error: 'Las viviendas programadas deben ser mayores que 0.' };
   escribirFila(HOJA_TAR, COLS_TAR, o);
   return { ok: true, tarea: sinFila(o) };
@@ -570,7 +621,7 @@ function jfAprobar(id, forzar) {
     PETROLEO_GAL: pro ? Number((pro * (Number(cfg.GAL_PETROLEO_POR_VIV) || 0)).toFixed(5)) : '',
     GASOLINA_GAL: pro ? Number((pro * (Number(cfg.GAL_GASOLINA_POR_VIV) || 0)).toFixed(6)) : '',
     FECHA_INICIO: t.FECHA, FECHA_TERMINO: t.FECHA,
-    OBSERVACIONES: ('Planillas de fumigadores: ' + nombres.join('; ') + (t.OBSERVACIONES ? '. ' + t.OBSERVACIONES : '')).slice(0, 480),
+    OBSERVACIONES: ((t.MOTIVO ? 'Control de: ' + t.MOTIVO + '. ' : '') + 'Insecticida: ' + insecticidas(listas) + '. Planillas de fumigadores: ' + nombres.join('; ') + (t.OBSERVACIONES ? '. ' + t.OBSERVACIONES : '')).slice(0, 480),
     TIPO: ''
   };
   var res = guardar(reg);
@@ -581,6 +632,12 @@ function jfAprobar(id, forzar) {
   escribirFila(HOJA_TAR, COLS_TAR, t);
   escribirDetalleViviendas(t, listas);
   return { ok: true, registro: res.registro, tarea: sinFila(t) };
+}
+
+function insecticidas(plas) {
+  var l = [];
+  plas.forEach(function (p) { var x = (p.INSECTICIDA || '') + (p.CONCENTRACION ? ' ' + p.CONCENTRACION : ''); if (x && l.indexOf(x) < 0) l.push(x); });
+  return l.join(', ') || '-';
 }
 
 /* Copia casa por casa a la hoja VIVIENDAS (para consultas en Excel). Reemplaza lo anterior de esa tarea. */

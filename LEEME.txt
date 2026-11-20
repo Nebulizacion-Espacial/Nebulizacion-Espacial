@@ -35,14 +35,20 @@ ARCHIVOS
 
 5. REGISTRO DE LOS FUMIGADORES (NUEVO)
   En dashboard.html, pestana "Fumigadores":
-  a) Fumigadores: registra a cada uno con su nombre, usuario (ej. su DNI) y un PIN de 4 a 6 numeros.
+  a) Fumigadores: registra a cada uno con su nombre y DNI. Su USUARIO es el DNI y su CONTRASENA
+     inicial tambien es el DNI; en el primer ingreso el sistema le obliga a crear su propia contrasena.
+     Si la olvida: Editar > marcar "Restablecer contrasena" (vuelve a ser su DNI).
      Copia el "Enlace para los fumigadores" y mandalo por WhatsApp.
-  b) Tareas: crea la tarea del dia (fecha, distrito, establecimiento, localidad/zona, vuelta,
+  Listas: ahi agregas o quitas insecticidas (el primero sale por defecto, hoy MALATHION 57 EC)
+     y las opciones de "Control de" (CONTROL DE BROTE, CERCO).
+  b) Tareas: crea la tarea del dia (fecha, distrito, establecimiento, localidad/zona, vuelta, CONTROL DE,
      VIVIENDAS PROGRAMADAS y manzanas) y marca que fumigadores la hacen.
   c) Cada fumigador abre fumigador.html en su celular, entra con su usuario y PIN, elige la tarea
      y registra casa por casa (sector, manzana, direccion/jefe de familia, residentes y si quedo
      nebulizada en frio/caliente, cerrada, renuente o deshabitada). Funciona sin senal: se guarda
-     en el celular y se envia cuando vuelve el internet. Al terminar pulsa "Terminar y enviar".
+     en el celular y se envia cuando vuelve el internet. Todo se guarda al instante en el celular
+     (incluso lo que esta escribiendo, por si se apaga); el boton "Guardar avance" lo confirma.
+     Al terminar pulsa "Terminar y enviar".
   d) Planillas por revisar: ves lo que mando cada fumigador (boton Ver = la planilla igual al
      formato fisico, se puede imprimir). Si algo esta mal pulsa Devolver con el motivo.
      Si esta bien pulsa "Aprobar y pasar al consolidado": se crea (o actualiza) la fila de esa

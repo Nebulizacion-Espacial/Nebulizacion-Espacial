@@ -2,7 +2,7 @@
    Guarda la pagina y las librerias en el equipo para que el sistema abra sin internet.
    Los datos NO pasan por aqui: se guardan con script.js y se envian al volver la conexion.
    Si cambias este archivo, sube el numero de VERSION. */
-var VERSION = 'neb-v3';
+var VERSION = 'neb-v4';
 var GUARDAR = ['neb-recursos']; // cache que llena script.js
 var BASE = ['./', 'index.html', 'dashboard.html', 'script.js', 'config.js', 'style.css', 'fumigadores-jefe.js', 'fumigadores-jefe.css',
   'fumigador.html', 'fumigador.js', 'fumigador.css', 'fumigador.webmanifest', 'icono-192.png', 'icono-512.png',
