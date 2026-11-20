@@ -136,19 +136,18 @@ async function jfDevolver(id) {
 }
 
 /* Detalle casa por casa, con el mismo orden de columnas del formato físico */
-function jfVerPlanilla(id) {
-  var p = JF.planillas.filter(function (x) { return x.ID === id; })[0]; if (!p) return;
+function jfFormatoHtml(p) {
   var t = JF.tareas.filter(function (x) { return x.ID === p.TAREA_ID; })[0] || {};
   var vv = p.VIVIENDAS || [], s = jfSuma([p]);
   function x(v, c) { return v.CONDICION === c ? '&#10005;' : ''; }
-  $('contenidoPlanilla').innerHTML =
-    '<div class="formato">' +
+  return '<div class="formato">' +
     '<h3>FORMATO DE NEBULIZACI&#211;N ESPACIAL DE VIVIENDAS CON EQUIPO PORT&#193;TIL</h3>' +
     '<div class="formato-cab">' +
-    '<span><b>Provincia:</b> ' + esc(t.PROVINCIA) + '</span><span><b>Microred:</b> ' + esc(t.MICRORED || '-') + '</span>' +
-    '<span><b>Distrito:</b> ' + esc(t.DISTRITO) + '</span><span><b>Establecimiento:</b> ' + esc(t.ESTABLECIMIENTO) + '</span>' +
-    '<span><b>Localidad:</b> ' + esc(t.ZONA) + '</span><span><b>Fecha:</b> ' + fechaCorta(t.FECHA) + '</span>' +
-    '<span><b>Control de:</b> ' + esc(t.MOTIVO || '-') + '</span><span><b>Vuelta:</b> ' + esc(t.VUELTA) + '</span><span><b>Estado:</b> ' + (JF_EST[p.ESTADO] || p.ESTADO) + (p.ENVIADO ? ' (' + esc(p.ENVIADO) + ')' : '') + '</span>' +
+    '<span><b>Red de salud:</b> SAN MARTIN</span><span><b>Provincia:</b> ' + esc(t.PROVINCIA) + '</span>' +
+    '<span><b>Microred:</b> ' + esc(t.MICRORED || '-') + '</span><span><b>Distrito:</b> ' + esc(t.DISTRITO) + '</span>' +
+    '<span><b>Establecimiento:</b> ' + esc(t.ESTABLECIMIENTO) + '</span><span><b>Localidad:</b> ' + esc(t.ZONA) + '</span>' +
+    '<span><b>Fecha:</b> ' + fechaCorta(t.FECHA) + '</span><span><b>Control de:</b> ' + esc(t.MOTIVO || '-') + '</span>' +
+    '<span><b>Vuelta:</b> ' + esc(t.VUELTA) + '</span><span><b>Estado:</b> ' + (JF_EST[p.ESTADO] || p.ESTADO) + (p.ENVIADO ? ' (' + esc(p.ENVIADO) + ')' : '') + '</span>' +
     '</div>' +
     '<div class="tabla-envoltura"><table class="tabla-formato"><thead>' +
     '<tr><th rowspan="2">N&#176;</th><th rowspan="2">Sector</th><th rowspan="2">N&#176; Mz</th><th rowspan="2">Direcci&#243;n / Jefe de familia</th><th rowspan="2" class="num">Resid.</th><th colspan="2">Nebulizada</th><th rowspan="2">Cerrada</th><th rowspan="2">Renuente</th><th rowspan="2">Deshab.</th><th rowspan="2">Hora</th></tr>' +
@@ -161,7 +160,23 @@ function jfVerPlanilla(id) {
     '<div class="formato-pie">' +
     '<span><b>J. de brigada:</b> ' + esc(t.JEFE_BRIGADA || '-') + '</span><span><b>Fumigador 1:</b> ' + esc(p.FUMIGADOR) + '</span><span><b>Fumigador 2:</b> ' + esc(p.FUMIGADOR_2 || '-') + '</span>' +
     '<span><b>Insecticida:</b> ' + esc(p.INSECTICIDA || '-') + '</span><span><b>Tipo:</b> ' + esc(p.TIPO_INSECTICIDA || '-') + '</span><span><b>Concentraci&#243;n final:</b> ' + esc(p.CONCENTRACION || '-') + '</span>' +
-    '</div></div>';
+    '</div>' +
+    '<div class="firmas"><span>Firma J. de brigada</span><span>Firma fumigador 1</span><span>Firma fumigador 2</span></div>' +
+    '</div>';
+}
+function jfVerPlanilla(id) {
+  var p = JF.planillas.filter(function (x) { return x.ID === id; })[0]; if (!p) return;
+  $('tituloModal').textContent = 'Planilla de ' + p.FUMIGADOR;
+  $('contenidoPlanilla').innerHTML = jfFormatoHtml(p);
+  $('modalPlanilla').hidden = false;
+}
+/* Todas las planillas de una tarea (cada una en su propia hoja al imprimir) */
+function jfVerPlanillasTarea(tid) {
+  var t = JF.tareas.filter(function (x) { return x.ID === tid; })[0];
+  var plas = jfPlanillasDe(tid).filter(function (p) { return (p.VIVIENDAS || []).length; });
+  if (!plas.length) { avisar('Esta tarea aún no tiene planillas con viviendas.', true); return; }
+  $('tituloModal').textContent = 'Planillas: ' + t.ZONA + ' · Vuelta ' + t.VUELTA + ' · ' + fechaCorta(t.FECHA) + ' (' + plas.length + ')';
+  $('contenidoPlanilla').innerHTML = plas.map(jfFormatoHtml).join('<div class="salto-pagina"></div>');
   $('modalPlanilla').hidden = false;
 }
 
@@ -243,7 +258,8 @@ function jfPintarTareas() {
         '<td>' + env + ' enviada' + (env === 1 ? '' : 's') + ' de ' + plas.length + '</td>' +
         '<td class="num">' + vis + (pro ? ' <span class="nota">(' + Math.round(vis / pro * 100) + '%)</span>' : '') + '</td>' +
         '<td><span class="est-fum e-' + (t.ESTADO === 'APROBADA' ? 'APROBADA' : 'BORRADOR') + '">' + (t.ESTADO === 'APROBADA' ? 'Aprobada' : 'Abierta') + '</span></td>' +
-        '<td class="acc"><button class="btn btn-claro btn-mini" data-editar-tarea="' + esc(t.ID) + '">Editar</button>' +
+        '<td class="acc">' + (plas.some(function (p) { return (p.VIVIENDAS || []).length; }) ? '<button class="btn btn-primario btn-mini" data-ver-tarea="' + esc(t.ID) + '">Ver / imprimir planillas</button> ' : '') +
+        '<button class="btn btn-claro btn-mini" data-editar-tarea="' + esc(t.ID) + '">Editar</button>' +
         (borrable ? ' <button class="btn btn-peligro btn-mini" data-eliminar-tarea="' + esc(t.ID) + '">Eliminar</button>' : '') + '</td></tr>';
     }).join('') + '</tbody>';
 }
@@ -387,6 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
   $('tablaTareas').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
     if (b.dataset.editarTarea) jfEditarTarea(b.dataset.editarTarea);
+    if (b.dataset.verTarea) jfVerPlanillasTarea(b.dataset.verTarea);
     if (b.dataset.eliminarTarea) jfEliminarTarea(b.dataset.eliminarTarea);
   });
   $('tablaFum').addEventListener('click', function (e) { var b = e.target.closest('[data-editar-fum]'); if (b) jfEditarFum(b.dataset.editarFum); });

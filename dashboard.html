@@ -232,7 +232,7 @@
       </form>
       <section class="bloque">
         <div class="bloque-cab"><h2>Tareas</h2>
-          <div class="acciones"><select id="filtroTareas"><option value="ABIERTA">Abiertas</option><option value="APROBADA">Aprobadas</option><option value="">Todas</option></select></div>
+          <div class="acciones"><select id="filtroTareas"><option value="ABIERTA">Abiertas</option><option value="APROBADA">Aprobadas (ver e imprimir)</option><option value="">Todas</option></select></div>
         </div>
         <div class="tabla-envoltura"><table id="tablaTareas"></table></div>
       </section>
@@ -289,7 +289,7 @@
   <div id="modalPlanilla" class="modal" hidden>
     <div class="modal-caja">
       <div class="modal-cab no-imprimir">
-        <h2>Planilla del fumigador</h2>
+        <h2 id="tituloModal">Planilla del fumigador</h2>
         <div><button class="btn btn-claro btn-mini" id="btnImprimirPlanilla">Imprimir</button>
         <button class="btn btn-claro btn-mini" id="btnCerrarModal">Cerrar</button></div>
       </div>

@@ -64,3 +64,21 @@ td.acc{white-space:nowrap;text-align:right}
 .lista-edit li span{flex:1;font-weight:600}
 .agregar-item{display:flex;gap:8px}
 .agregar-item input{flex:1;padding:8px 10px;border:1px solid var(--borde);border-radius:6px}
+
+.firmas{display:none}
+.salto-pagina{height:0;margin:22px 0;border-top:3px dashed var(--borde)}
+@media print{
+  body.imprimiendo-planilla .salto-pagina{border:0;margin:0;page-break-after:always;break-after:page}
+  body.imprimiendo-planilla .firmas{display:flex;justify-content:space-around;margin-top:46px;font-size:12px}
+  body.imprimiendo-planilla .firmas span{border-top:1px solid #000;padding-top:4px;width:28%;text-align:center}
+  body.imprimiendo-planilla .tabla-envoltura{overflow:visible}
+  body.imprimiendo-planilla, body.imprimiendo-planilla #app{background:#fff !important}
+  body.imprimiendo-planilla .modal{display:block !important;overflow:visible !important;inset:auto}
+  body.imprimiendo-planilla .modal-caja{width:100% !important;box-shadow:none;border-radius:0}
+  body.imprimiendo-planilla .formato-cab, body.imprimiendo-planilla .formato-pie{grid-template-columns:repeat(3,1fr);font-size:12px}
+  body.imprimiendo-planilla .tabla-formato{table-layout:fixed;width:100% !important;font-size:10.5px}
+  body.imprimiendo-planilla .tabla-formato th, body.imprimiendo-planilla .tabla-formato td{padding:4px 3px;white-space:normal;word-wrap:break-word}
+  body.imprimiendo-planilla .tabla-formato th:nth-child(1){width:6%}
+  body.imprimiendo-planilla .tabla-formato thead tr:first-child th:nth-child(4){width:30%}
+  @page{size:A4;margin:12mm}
+}
