@@ -1,0 +1,154 @@
+/* Nebulización espacial 2026 - página del fumigador (pensada para celular) */
+:root{
+  --selva:#14352a; --hoja:#2f7d4f; --hoja-clara:#dcebe1; --niebla:#eef3f0;
+  --ambar:#e0a526; --ambar-claro:#fff4d6; --rojo:#b23b2e; --tinta:#1d2a24;
+  --gris:#5d6b64; --borde:#cfdad3; --blanco:#fff; --desh:#8a9a92;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:"Source Sans 3",Segoe UI,Arial,sans-serif;font-size:16px;color:var(--tinta);background:var(--niebla)}
+h1,h2{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-weight:600;margin:0}
+h2{font-size:21px;color:var(--selva);margin-bottom:10px}
+button,input,select,textarea{font:inherit}
+:focus-visible{outline:3px solid var(--ambar);outline-offset:2px}
+[hidden]{display:none !important}
+
+.btn{border:0;border-radius:8px;padding:11px 16px;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn-primario{background:var(--hoja);color:#fff}
+.btn-primario:active{background:#286b43}
+.btn-claro{background:#fff;color:var(--selva);border:1px solid var(--borde)}
+.btn-grande{padding:15px 18px;font-size:18px}
+.btn-ancho{width:100%;margin-top:12px}
+
+/* Ingreso */
+.login{min-height:100vh;min-height:100svh;display:grid;place-items:center;padding:20px;
+  background:linear-gradient(180deg,rgba(20,53,42,.7),rgba(20,53,42,.96)),url("selva.jpg") center/cover}
+.login-caja{background:#fff;padding:28px 24px;border-radius:14px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px}
+.login-caja img{height:54px;align-self:flex-start}
+.login-caja h1{font-size:32px;color:var(--selva)}
+.login-caja .sub{margin:0 0 10px;color:var(--gris);font-size:14px}
+.login-caja label{font-size:14px;font-weight:700;color:var(--gris)}
+.login-caja input{padding:13px 12px;border:1px solid var(--borde);border-radius:8px;font-size:18px}
+.login-caja .btn{margin-top:8px}
+.error{color:var(--rojo);min-height:1.2em;margin:4px 0;font-weight:600}
+.nota{color:var(--gris);font-size:13px;margin:0}
+
+/* Barra */
+.barra{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:var(--selva);color:#fff}
+.barra-titulo{flex:1;min-width:0;display:flex;flex-direction:column}
+.barra-titulo strong{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.barra-titulo small{font-size:12px;color:#cfe3d6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icono{background:rgba(255,255,255,.12);border:0;color:#fff;width:40px;height:40px;border-radius:10px;font-size:20px;cursor:pointer;flex:none}
+.sync{font-size:12px;font-weight:700;white-space:nowrap}
+.sync button{border:0;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;background:#fff;color:var(--selva);cursor:pointer}
+
+.vista{padding:14px 12px 30px;max-width:640px;margin:0 auto}
+.ayuda{color:var(--gris);font-size:14px;margin:0 0 12px;line-height:1.45}
+.vacio{padding:26px 14px;text-align:center;color:var(--gris);background:#fff;border:1px dashed var(--borde);border-radius:12px;line-height:1.5}
+
+/* Tarjetas de tareas */
+.tarea{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--borde);border-left:6px solid var(--hoja);border-radius:12px;padding:12px 14px;margin-bottom:10px;cursor:pointer;color:inherit}
+.tarea:active{background:var(--hoja-clara)}
+.tarea-fila{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.tarea-fila b{font-size:15px;margin-right:auto}
+.tarea-zona{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:22px;font-weight:600;color:var(--selva);line-height:1.15}
+.tarea-det{font-size:13px;color:var(--gris);margin-top:2px}
+
+.chip{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:var(--hoja-clara);color:var(--selva)}
+.chip.hoy{background:var(--ambar);color:#3b2a00}
+.e-NUEVA{background:#e8eeea;color:var(--gris)}
+.e-BORRADOR{background:var(--ambar-claro);color:#7a5400}
+.e-ENVIADA{background:#dce8f7;color:#1d4f8a}
+.e-APROBADA{background:var(--hoja);color:#fff}
+.e-DEVUELTA{background:#fbe1dd;color:var(--rojo)}
+.e-SYNC{background:#fff;border:1px dashed var(--ambar);color:#7a5400}
+
+/* Planilla */
+.cabecera-tarea{background:var(--selva);color:#fff;border-radius:12px;padding:14px;margin-bottom:12px}
+.cab-zona{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:24px;font-weight:600;line-height:1.15;margin-bottom:8px}
+.cabecera-tarea dl{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:0}
+.cabecera-tarea dt{font-size:11px;color:#a9c9b6;text-transform:uppercase;letter-spacing:.4px}
+.cabecera-tarea dd{margin:0;font-size:14px;font-weight:600}
+.cab-obs{margin:10px 0 0;font-size:13px;color:#e3efe8}
+
+.aviso-devuelta,.aviso-cerrada{border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:14px;line-height:1.4}
+.aviso-devuelta{background:#fbe1dd;color:#7a1f15;border:1px solid #efb3aa}
+.aviso-cerrada{background:#fff;border:1px solid var(--borde)}
+
+.bloque{background:#fff;border:1px solid var(--borde);border-radius:12px;padding:14px;margin-bottom:12px}
+details.bloque summary{cursor:pointer;font-weight:700;color:var(--selva);list-style:none}
+details.bloque summary::before{content:"▸ "}
+details.bloque[open] summary::before{content:"▾ "}
+details.bloque summary small{font-weight:600;color:var(--gris)}
+details.bloque[open] .rejilla{margin-top:12px}
+
+.rejilla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rejilla .ancho{grid-column:1/-1}
+.rejilla label,.label-cond{display:block;font-size:13px;font-weight:700;color:var(--gris);margin-bottom:4px}
+.rejilla input{width:100%;padding:12px 11px;border:1px solid var(--borde);border-radius:8px;font-size:17px;background:#fff}
+.rejilla input:disabled{background:#f3f6f4;color:var(--gris)}
+
+.nueva{border:2px solid var(--hoja)}
+.contador{display:flex;align-items:stretch;gap:8px}
+.contador button{width:56px;border:1px solid var(--borde);border-radius:8px;background:var(--niebla);font-size:24px;font-weight:700;color:var(--selva);cursor:pointer}
+.contador input{text-align:center;font-size:20px;font-weight:700}
+.label-cond{margin:14px 0 8px}
+
+.condiciones{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.condiciones button{min-height:64px;border-radius:12px;border:2px solid transparent;font-size:14px;line-height:1.2;cursor:pointer;color:#fff;padding:8px 6px}
+.condiciones button b{font-size:19px}
+.condiciones .c-neb{background:var(--hoja)}
+.condiciones .c-cer{background:var(--ambar);color:#3b2a00}
+.condiciones .c-ren{background:var(--rojo)}
+.condiciones .c-desh{background:var(--desh)}
+.condiciones button:active{transform:scale(.97);filter:brightness(1.1)}
+.condiciones button.marcada{border-color:var(--tinta);box-shadow:0 0 0 3px #fff inset}
+.condiciones button:last-child{grid-column:1/-1}
+
+/* Lista de viviendas */
+.viv{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #edf1ee}
+.viv:last-child{border-bottom:0}
+.viv.editando{background:var(--ambar-claro);margin:0 -14px;padding:10px 14px}
+.viv-n{flex:none;width:30px;height:30px;border-radius:50%;background:var(--niebla);display:grid;place-items:center;font-weight:700;font-size:13px;color:var(--selva)}
+.viv-txt{flex:1;min-width:0}
+.viv-txt b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.viv-txt small{color:var(--gris);font-size:12px}
+.viv .chip{flex:none}
+.chip.c-neb{background:var(--hoja);color:#fff}
+.chip.c-cer{background:var(--ambar);color:#3b2a00}
+.chip.c-ren{background:var(--rojo);color:#fff}
+.chip.c-desh{background:var(--desh);color:#fff}
+.viv-acc{display:flex;gap:4px;flex:none}
+.viv-acc button{border:1px solid var(--borde);background:#fff;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:15px}
+
+/* Totales fijos abajo */
+.espacio-totales{height:80px}
+.totales{position:fixed;left:0;right:0;bottom:0;z-index:15;display:grid;grid-template-columns:repeat(7,1fr);gap:2px;
+  padding:8px 6px;padding-bottom:max(8px,env(safe-area-inset-bottom));background:var(--selva);color:#fff;box-shadow:0 -4px 14px rgba(0,0,0,.2)}
+.totales div{text-align:center;border-radius:6px;padding:4px 0}
+.totales b{display:block;font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:22px;line-height:1}
+.totales small{font-size:10px;color:#cfe3d6}
+.totales .t-neb{background:rgba(47,125,79,.55)}
+.totales .t-cer{background:rgba(224,165,38,.35)}
+.totales .t-ren{background:rgba(178,59,46,.45)}
+.totales .t-desh{background:rgba(138,154,146,.35)}
+
+/* Avisos */
+.aviso{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:50;width:min(92%,420px);padding:12px 16px;border-radius:10px;
+  background:var(--selva);color:#fff;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.3);text-align:center}
+.aviso.error{background:var(--rojo)}
+.cargando{position:fixed;inset:0;z-index:60;background:rgba(238,243,240,.6);display:grid;place-items:center}
+.cargando span{width:44px;height:44px;border-radius:50%;border:4px solid var(--hoja-clara);border-top-color:var(--hoja);animation:gira .8s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+
+@media (min-width:700px){
+  .condiciones{grid-template-columns:repeat(5,1fr)}
+  .condiciones button:last-child{grid-column:auto}
+  .totales{max-width:640px;margin:0 auto;border-radius:12px 12px 0 0}
+}
+
+.instalar{margin-top:10px;padding-top:12px;border-top:1px dashed var(--borde)}
+.instalar .btn-ancho{margin-top:0}
+.instalar .nota{margin-top:8px;line-height:1.4}
+/* Cuando se abre como aplicacion instalada */
+@media (display-mode: standalone){ .barra{padding-top:max(14px,env(safe-area-inset-top))} }

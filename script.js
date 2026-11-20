@@ -2,9 +2,8 @@
    Sistema de Nebulizaci\u00f3n Espacial 2026 - script.js
    Cualquier modificaci\u00f3n del sistema se hace en este archivo.
    ========================================================= */
-var CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbw5HRsZ8K6bxObGZMmQbbmDPla5xqmxhcRYJN9SZyzewfi2qK1gcQtZ9Vz7xQSZMB49/exec'
-};
+// La URL del Apps Script ahora está en config.js (la comparten el jefe y los fumigadores)
+var CONFIG = window.CONFIG || { API_URL: '' };
 
 var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 var CAMPOS = ['PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIENTO', 'ZONA', 'VUELTA', 'VIV_PRO', 'VIV_NEB', 'VIV_CER', 'VIV_REN', 'VIV_DESH',
@@ -179,7 +178,7 @@ function prepararSinInternet() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('sw.js').catch(function () {});
   if (!window.caches) return;
-  var urls = [location.href.split('#')[0], 'index.html', 'dashboard.html', 'script.js'];
+  var urls = [location.href.split('#')[0], 'index.html', 'dashboard.html', 'script.js', 'config.js', 'fumigadores-jefe.js', 'fumigador.html', 'fumigador.js', 'fumigador.css'];
   document.querySelectorAll('script[src],link[rel="stylesheet"][href],link[rel="icon"][href],img[src]').forEach(function (x) { urls.push(x.src || x.href); });
   caches.open('neb-recursos').then(function (cache) {
     urls.forEach(function (u) {
@@ -201,7 +200,7 @@ function avisar(msg, esError) {
 async function ingresar(ev) {
   ev.preventDefault();
   $('loginError').textContent = '';
-  if (CONFIG.API_URL.indexOf('http') !== 0) { $('loginError').textContent = 'Falta pegar la URL /exec en CONFIG.API_URL de script.js.'; return; }
+  if (CONFIG.API_URL.indexOf('http') !== 0) { $('loginError').textContent = 'Falta pegar la URL /exec en config.js.'; return; }
   cargando(true);
   var clave = $('clave').value;
   try {
@@ -1051,7 +1050,7 @@ async function guardarFormulario(ev) {
 
 /* ---------- Navegaci\u00f3n ---------- */
 function mostrarVista(v) {
-  ['panel', 'registros', 'formulario'].forEach(function (x) { $('vista-' + x).hidden = x !== v; });
+  ['panel', 'registros', 'formulario', 'fumigadores'].forEach(function (x) { if ($('vista-' + x)) $('vista-' + x).hidden = x !== v; });
   document.querySelectorAll('.pestana').forEach(function (b) { b.classList.toggle('activa', b.dataset.vista === v); });
   $('tabForm').textContent = ESTADO.editandoId && v === 'formulario' ? 'Editando registro' : 'Nuevo registro';
   if (v === 'panel') Object.keys(ESTADO.charts).forEach(function (k) { ESTADO.charts[k].resize(); });

@@ -2,15 +2,19 @@ SISTEMA DE NEBULIZACION ESPACIAL 2026
 ======================================
 
 ARCHIVOS
-  index.html, dashboard.html, script.js, style.css, presentacion.css -> pagina web
+  index.html, dashboard.html, script.js, style.css, presentacion.css -> sistema del jefe
+  fumigador.html, fumigador.js, fumigador.css                       -> pagina del FUMIGADOR (celular)
+  fumigadores-jefe.js, fumigadores-jefe.css                         -> pestana "Fumigadores" del jefe
+  config.js  -> AQUI va la URL /exec (la usan el jefe y los fumigadores)
+  sw.js      -> permite abrir las paginas sin internet
   Codigo.gs  -> backend (Google Apps Script)
-  Copia en la misma carpeta las imagenes del dashboard de dengue: logo.png, mosquito.png, selva.jpg
+  Imagenes: logo.png, mosquito.png, selva.jpg, etc.
 
 1. CREAR LA BASE (una sola vez)
   a) En Google Drive crea una hoja de calculo nueva: "BD Nebulizacion Espacial".
   b) Extensiones > Apps Script. Borra lo que haya, pega todo Codigo.gs y guarda.
   c) Elige la funcion "instalar" y pulsa Ejecutar (acepta los permisos).
-     Se crean las hojas REGISTROS y CONFIG.
+     Se crean las hojas REGISTROS, CONFIG, FUMIGADORES, TAREAS, PLANILLAS y VIVIENDAS.
   d) En la hoja CONFIG cambia la CLAVE (contrasena por defecto: nebulizacion2026).
      Ahi tambien estan las tasas de gasto por vivienda programada.
   e) Implementar > Nueva implementacion > tipo Aplicacion web
@@ -18,17 +22,39 @@ ARCHIVOS
      Copia la URL que termina en /exec.
 
 2. CONECTAR LA PAGINA
-  En script.js, linea API_URL, pega la URL /exec entre las comillas.
-  (Si algun dia reemplazas script.js, vuelve a pegar la URL.)
+  En config.js pega la URL /exec entre las comillas de API_URL.
+  (Antes estaba en script.js; ahora solo va en config.js.)
 
 3. CARGAR EL HISTORICO ENERO-SETIEMBRE
   Abre dashboard.html, entra con la clave, pestana Registros > Importar Excel
   y elige Nebulizacion_historico_2026.xlsx. Si lo importas dos veces no se duplica.
 
-4. USO MENSUAL
+4. USO MENSUAL (como antes)
   Con cada reporte del jefe de nebulizacion: Nuevo registro, llenas y Guardar.
-  Para el reporte: Panel, filtra el mes y pulsa Descargar consolidado
-  (sale en el mismo formato de columnas del consolidado mensual).
+  Para el reporte: Panel, filtra el mes y pulsa Descargar consolidado.
+
+5. REGISTRO DE LOS FUMIGADORES (NUEVO)
+  En dashboard.html, pestana "Fumigadores":
+  a) Fumigadores: registra a cada uno con su nombre, usuario (ej. su DNI) y un PIN de 4 a 6 numeros.
+     Copia el "Enlace para los fumigadores" y mandalo por WhatsApp.
+  b) Tareas: crea la tarea del dia (fecha, distrito, establecimiento, localidad/zona, vuelta,
+     VIVIENDAS PROGRAMADAS y manzanas) y marca que fumigadores la hacen.
+  c) Cada fumigador abre fumigador.html en su celular, entra con su usuario y PIN, elige la tarea
+     y registra casa por casa (sector, manzana, direccion/jefe de familia, residentes y si quedo
+     nebulizada en frio/caliente, cerrada, renuente o deshabitada). Funciona sin senal: se guarda
+     en el celular y se envia cuando vuelve el internet. Al terminar pulsa "Terminar y enviar".
+  d) Planillas por revisar: ves lo que mando cada fumigador (boton Ver = la planilla igual al
+     formato fisico, se puede imprimir). Si algo esta mal pulsa Devolver con el motivo.
+     Si esta bien pulsa "Aprobar y pasar al consolidado": se crea (o actualiza) la fila de esa
+     zona y vuelta en Registros con:
+       programadas y manzanas programadas = las de la tarea
+       nebulizadas, cerradas, renuentes, deshabitadas = suma de las planillas enviadas
+       manzanas nebulizadas = manzanas con al menos una casa nebulizada
+       equipos portatiles frio/caliente = planillas que usaron frio / caliente
+       insecticida y combustible = calculados con las tasas de CONFIG
+     Desde ahi ya sale en el Panel y en el consolidado descargado.
+  Si corriges una planilla devuelta y la vuelves a aprobar, se ACTUALIZA la misma fila (no se duplica).
+  La hoja VIVIENDAS guarda el detalle casa por casa de lo aprobado.
 
 SI CAMBIAS Codigo.gs
   Pegalo en Apps Script, ejecuta "instalar" y en Implementar > Administrar

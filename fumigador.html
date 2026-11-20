@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14352a">
+<title>Planilla del fumigador | Nebulizaci&#243;n espacial 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fumigador.css">
+<!-- Para instalarla como aplicacion en el celular -->
+<link rel="manifest" href="fumigador.webmanifest">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fumigador">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+
+<!-- ============ INGRESO ============ -->
+<section id="vLogin" class="login">
+  <form id="formLogin" class="login-caja" autocomplete="on">
+    <img src="logo.png" alt="" onerror="this.style.display='none'">
+    <h1>Planilla del fumigador</h1>
+    <p class="sub">Nebulizaci&#243;n espacial de viviendas con equipo port&#225;til</p>
+    <label for="usuario">Usuario</label>
+    <input id="usuario" autocomplete="username" autocapitalize="characters" placeholder="Tu DNI o usuario" required>
+    <label for="pin">PIN</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="&#8226;&#8226;&#8226;&#8226;" required>
+    <button type="submit" class="btn btn-primario btn-grande" id="btnLogin">Ingresar</button>
+    <p id="loginError" class="error" role="alert"></p>
+    <p class="nota">Tu usuario y PIN te los da el jefe de brigada.</p>
+    <div class="instalar" id="cajaInstalar" hidden>
+      <button type="button" class="btn btn-claro btn-ancho" id="btnInstalar">&#128242; Instalar la aplicaci&#243;n en este celular</button>
+      <p class="nota" id="ayudaInstalar"></p>
+    </div>
+  </form>
+</section>
+
+<!-- ============ APP ============ -->
+<div id="app" hidden>
+  <header class="barra">
+    <button id="btnAtras" class="icono" aria-label="Volver" hidden>&#8592;</button>
+    <div class="barra-titulo">
+      <strong id="tituloBarra">Mis tareas</strong>
+      <small id="nombreFum"></small>
+    </div>
+    <span id="estadoSync" class="sync"></span>
+    <button id="btnMenu" class="icono" aria-label="Salir" title="Salir">&#9211;</button>
+  </header>
+
+  <!-- LISTA DE TAREAS -->
+  <main id="vTareas" class="vista">
+    <p class="ayuda">Elige la tarea que te asign&#243; tu jefe de brigada y registra cada vivienda. Funciona aunque no tengas se&#241;al: todo se guarda en tu celular y se env&#237;a cuando vuelva el internet.</p>
+    <div id="listaTareas"></div>
+    <button class="btn btn-claro btn-ancho" id="btnRefrescar">&#8635; Actualizar tareas</button>
+    <button class="btn btn-primario btn-ancho" id="btnInstalar2" hidden>&#128242; Instalar como aplicaci&#243;n</button>
+  </main>
+
+  <!-- PLANILLA -->
+  <main id="vPlanilla" class="vista" hidden>
+    <section class="cabecera-tarea" id="cabTarea"></section>
+
+    <div class="aviso-devuelta" id="avisoDevuelta" hidden></div>
+    <div class="aviso-cerrada" id="avisoCerrada" hidden></div>
+
+    <details class="bloque" id="bloqueDatos">
+      <summary>Equipo e insecticida <small id="resumenDatos"></small></summary>
+      <div class="rejilla">
+        <div class="ancho"><label for="pFum2">Fumigador 2 (compa&#241;ero, opcional)</label><input id="pFum2" autocapitalize="characters"></div>
+        <div class="ancho"><label for="pInsecticida">Nombre del insecticida</label><input id="pInsecticida" autocapitalize="characters" list="lInsect"></div>
+        <div><label for="pTipo">Tipo</label><input id="pTipo" autocapitalize="characters" placeholder="Ej. CE, EW"></div>
+        <div><label for="pConc">Concentraci&#243;n final</label><input id="pConc" placeholder="Ej. 2%"></div>
+      </div>
+      <datalist id="lInsect"></datalist>
+    </details>
+
+    <!-- AGREGAR VIVIENDA -->
+    <section class="bloque nueva" id="bloqueNueva">
+      <h2 id="tituloNueva">Vivienda N&#176; <span id="numNueva">1</span></h2>
+      <div class="rejilla">
+        <div><label for="vSector">Sector</label><input id="vSector" autocapitalize="characters"></div>
+        <div><label for="vManzana">N&#176; Manzana</label><input id="vManzana" autocapitalize="characters"></div>
+        <div class="ancho"><label for="vDireccion">Direcci&#243;n / Nombre del jefe de familia</label><input id="vDireccion" autocapitalize="words"></div>
+        <div class="ancho">
+          <label>Residentes</label>
+          <div class="contador">
+            <button type="button" data-res="-1" aria-label="Menos">&#8722;</button>
+            <input id="vResidentes" type="number" inputmode="numeric" min="0" max="99" value="0">
+            <button type="button" data-res="1" aria-label="M&#225;s">+</button>
+          </div>
+        </div>
+      </div>
+      <p class="label-cond">Marca c&#243;mo qued&#243; la vivienda (se guarda al tocar):</p>
+      <div class="condiciones" id="condiciones">
+        <button type="button" data-cond="NEB_FRIO" class="c-neb">Nebulizada<br><b>En fr&#237;o</b></button>
+        <button type="button" data-cond="NEB_CALIENTE" class="c-neb">Nebulizada<br><b>Caliente</b></button>
+        <button type="button" data-cond="CERRADA" class="c-cer"><b>Cerrada</b></button>
+        <button type="button" data-cond="RENUENTE" class="c-ren"><b>Renuente</b></button>
+        <button type="button" data-cond="DESHABITADA" class="c-desh"><b>Deshabitada</b></button>
+      </div>
+      <button type="button" class="btn btn-claro btn-ancho" id="btnCancelarEdicion" hidden>Cancelar edici&#243;n</button>
+    </section>
+
+    <!-- LISTA DE VIVIENDAS -->
+    <section class="bloque">
+      <h2>Viviendas registradas</h2>
+      <div id="listaViviendas"></div>
+    </section>
+
+    <button class="btn btn-primario btn-grande btn-ancho" id="btnEnviar">&#10004; Terminar y enviar al jefe</button>
+    <div class="espacio-totales"></div>
+  </main>
+
+  <!-- TOTALES (fila "Total" del formato) -->
+  <footer class="totales" id="totales" hidden></footer>
+</div>
+
+<div id="aviso" class="aviso" role="status" hidden></div>
+<div id="cargando" class="cargando" hidden><span></span></div>
+
+<script src="config.js"></script>
+<script src="fumigador.js"></script>
+</body>
+</html>

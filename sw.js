@@ -2,9 +2,11 @@
    Guarda la pagina y las librerias en el equipo para que el sistema abra sin internet.
    Los datos NO pasan por aqui: se guardan con script.js y se envian al volver la conexion.
    Si cambias este archivo, sube el numero de VERSION. */
-var VERSION = 'neb-v1';
+var VERSION = 'neb-v3';
 var GUARDAR = ['neb-recursos']; // cache que llena script.js
-var BASE = ['./', 'index.html', 'dashboard.html', 'script.js'];
+var BASE = ['./', 'index.html', 'dashboard.html', 'script.js', 'config.js', 'style.css', 'fumigadores-jefe.js', 'fumigadores-jefe.css',
+  'fumigador.html', 'fumigador.js', 'fumigador.css', 'fumigador.webmanifest', 'icono-192.png', 'icono-512.png',
+  'icono-maskable-512.png', 'apple-touch-icon.png', 'logo.png', 'selva.jpg'];
 
 self.addEventListener('install', function (e) {
   self.skipWaiting();
@@ -33,7 +35,8 @@ self.addEventListener('fetch', function (e) {
       return caches.match(req, { ignoreSearch: true }).then(function (r) {
         if (r) return r;
         if (req.mode !== 'navigate') return Response.error();
-        return caches.match('dashboard.html', { ignoreSearch: true }).then(function (d) { return d || Response.error(); });
+        var pagina = /fumigador/.test(url.pathname) ? 'fumigador.html' : 'dashboard.html';
+        return caches.match(pagina, { ignoreSearch: true }).then(function (d) { return d || Response.error(); });
       });
     }));
   } else {

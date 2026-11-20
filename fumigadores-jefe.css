@@ -1,0 +1,59 @@
+/* Nebulización espacial 2026 - estilos de la pestaña Fumigadores (jefe) */
+.badge-fum{display:inline-block;min-width:20px;margin-left:4px;padding:1px 6px;border-radius:999px;background:var(--ambar);color:#3b2a00;font-size:12px;text-align:center}
+
+.sub-pestanas{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:14px}
+.sub-pestanas .sub{border:1px solid var(--borde);background:#fff;color:var(--selva);padding:8px 14px;border-radius:999px;font-weight:700;cursor:pointer}
+.sub-pestanas .sub.activa{background:var(--selva);color:#fff;border-color:var(--selva)}
+.sub-pestanas .sub b{color:var(--ambar)}
+
+#sub-revisar > .nota{margin:0 0 12px}
+.vacio-fum{text-align:center;color:var(--gris);padding:26px}
+.tarea-rev{border-left:5px solid var(--hoja)}
+.tarea-rev h2{font-size:23px}
+.resumen-tarea{display:flex;flex-wrap:wrap;gap:8px 22px;margin:4px 0 10px;padding:10px 12px;background:var(--niebla);border-radius:6px;font-size:14px}
+.resumen-tarea b{font-variant-numeric:tabular-nums}
+.resumen-tarea .mal{color:var(--rojo);font-weight:700}
+td.acc{white-space:nowrap;text-align:right}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.est-fum{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.est-fum.e-BORRADOR{background:var(--ambar-claro);color:#7a5400}
+.est-fum.e-ENVIADA{background:#dce8f7;color:#1d4f8a}
+.est-fum.e-APROBADA{background:var(--hoja);color:#fff}
+.est-fum.e-DEVUELTA{background:#fbe1dd;color:var(--rojo)}
+
+.botones{display:flex;justify-content:flex-end;gap:10px;margin-top:12px}
+.asignar{margin-top:14px !important}
+.checks-fum{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:6px}
+.check-fum{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--tinta) !important;font-size:14px !important;cursor:pointer}
+.check-fum input{width:18px !important;height:18px;accent-color:var(--hoja)}
+
+.enlace-fum{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.enlace-fum > div{margin-right:auto}
+.enlace-fum code{background:var(--niebla);padding:6px 10px;border-radius:6px;font-size:13px;word-break:break-all}
+
+/* Modal de planilla */
+.modal{position:fixed;inset:0;z-index:45;background:rgba(20,53,42,.55);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
+.modal-caja{background:#fff;border-radius:10px;width:100%;max-width:1000px;padding:16px 18px}
+.modal-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.modal-cab h2{color:var(--selva)}
+.formato h3{font-family:"Barlow Condensed",Arial Narrow,sans-serif;font-size:20px;text-align:center;margin:0 0 10px;color:var(--selva)}
+.formato-cab,.formato-pie{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px;font-size:14px;margin-bottom:10px}
+.formato-pie{margin-top:12px;padding-top:10px;border-top:1px solid var(--borde)}
+.tabla-formato th,.tabla-formato td{border:1px solid #c8d3cc;text-align:center}
+.tabla-formato td:nth-child(4){text-align:left}
+.tabla-formato th{position:static}
+.tabla-formato td.marca{font-weight:700;color:var(--selva)}
+.tabla-formato tfoot td{background:var(--niebla)}
+
+@media print{
+  body.imprimiendo-planilla > *:not(#app){display:none !important}
+  body.imprimiendo-planilla #app > *:not(#modalPlanilla){display:none !important}
+  body.imprimiendo-planilla .modal{position:static;background:none;padding:0}
+  body.imprimiendo-planilla .modal-caja{max-width:none;padding:0}
+  body.imprimiendo-planilla .no-imprimir{display:none !important}
+  body.imprimiendo-planilla .tabla-formato{font-size:11px}
+}
+
+.aviso-vuelta{margin:14px 0 0;padding:10px 14px;border-radius:8px;font-size:.92rem;line-height:1.45;border:1px solid #f0d48a;background:#fff7e0;color:#5c4300}
+.aviso-vuelta.ok{border-color:#9fd1b0;background:#e8f5ec;color:#14532d}

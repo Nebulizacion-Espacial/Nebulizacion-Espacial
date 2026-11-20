@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="fumigadores-jefe.css">
 <style>
   #tablaRegistros .col-sel { width: 34px; text-align: center; padding-left: 6px; padding-right: 6px; }
   #tablaRegistros .col-sel input { width: 18px; height: 18px; cursor: pointer; accent-color: #2f7d4f; }
@@ -43,6 +44,7 @@
       <button class="pestana activa" data-vista="panel" role="tab">Panel</button>
       <button class="pestana" data-vista="registros" role="tab">Registros</button>
       <button class="pestana" data-vista="formulario" role="tab" id="tabForm">Nuevo registro</button>
+      <button class="pestana" data-vista="fumigadores" role="tab">Fumigadores <b id="badgeFum" class="badge-fum" hidden></b></button>
     </nav>
     <button id="btnSalir" class="btn btn-claro">Salir</button>
   </header>
@@ -183,6 +185,98 @@
     </form>
   </main>
 
+  <!-- FUMIGADORES: tareas, planillas casa por casa y aprobación -->
+  <main id="vista-fumigadores" class="vista" hidden>
+    <nav class="sub-pestanas" id="subFum">
+      <button class="sub activa" data-sub="revisar">Planillas por revisar <b id="cuentaRevisar"></b></button>
+      <button class="sub" data-sub="tareas">Tareas</button>
+      <button class="sub" data-sub="personal">Fumigadores</button>
+      <button class="btn btn-claro btn-mini" id="btnFumActualizar" style="margin-left:auto">&#8635; Actualizar</button>
+    </nav>
+    <p class="nota" id="fumSinRed" hidden>&#128244; Esta secci&#243;n necesita internet.</p>
+
+    <!-- POR REVISAR -->
+    <section id="sub-revisar">
+      <p class="nota">Cuando los fumigadores env&#237;an su planilla aparece aqu&#237;. Rev&#237;sala y pulsa <b>Aprobar y pasar al consolidado</b>: se crea (o actualiza) la fila de esa zona y vuelta en <b>Registros</b>, con las programadas de la tarea y el gasto calculado.</p>
+      <div id="listaRevisar"></div>
+    </section>
+
+    <!-- TAREAS -->
+    <section id="sub-tareas" hidden>
+      <form id="formTarea" class="bloque formulario" novalidate>
+        <div class="bloque-cab"><h2 id="tituloTarea">Nueva tarea para fumigadores</h2><span class="nota" id="idTarea"></span></div>
+        <div class="rejilla">
+          <div><label for="tFECHA">Fecha</label><input type="date" id="tFECHA" required></div>
+          <div><label for="tDISTRITO">Distrito</label><input id="tDISTRITO" list="lDistrito" required></div>
+          <div class="doble"><label for="tESTABLECIMIENTO">Establecimiento de salud</label><input id="tESTABLECIMIENTO" list="lEess" required></div>
+          <div><label for="tMICRORED">Microred</label><input id="tMICRORED"></div>
+          <div class="doble"><label for="tZONA">Localidad / zona / sector</label><input id="tZONA" list="lZonaTarea" placeholder="Ej. CERCO 2 - SECTOR III" required><datalist id="lZonaTarea"></datalist></div>
+          <div><label for="tVUELTA">Vuelta</label><select id="tVUELTA" required><option value="">Elegir</option><option>I</option><option>II</option><option>III</option><option>IV</option></select></div>
+          <div><label for="tVIV_PRO">Viviendas programadas</label><input type="number" min="1" id="tVIV_PRO" required></div>
+          <div><label for="tMZ_PRO">Manzanas programadas</label><input type="number" min="0" id="tMZ_PRO"></div>
+          <div class="doble"><label for="tJEFE_BRIGADA">Jefe de brigada</label><input id="tJEFE_BRIGADA"></div>
+          <div class="doble"><label for="tOBSERVACIONES">Indicaciones para los fumigadores</label><input id="tOBSERVACIONES" maxlength="300"></div>
+        </div>
+        <div id="avisoVueltaTarea" class="aviso-vuelta" hidden></div>
+        <fieldset class="asignar"><legend>Fumigadores asignados</legend>
+          <p class="nota">Si no marcas a nadie, la tarea la ven todos los fumigadores activos.</p>
+          <div id="checksFum" class="checks-fum"></div>
+        </fieldset>
+        <p id="tareaError" class="error" role="alert"></p>
+        <div class="botones">
+          <button type="button" class="btn btn-claro" id="btnTareaCancelar">Limpiar</button>
+          <button type="submit" class="btn btn-primario" id="btnTareaGuardar">Crear tarea</button>
+        </div>
+      </form>
+      <section class="bloque">
+        <div class="bloque-cab"><h2>Tareas</h2>
+          <div class="acciones"><select id="filtroTareas"><option value="ABIERTA">Abiertas</option><option value="APROBADA">Aprobadas</option><option value="">Todas</option></select></div>
+        </div>
+        <div class="tabla-envoltura"><table id="tablaTareas"></table></div>
+      </section>
+    </section>
+
+    <!-- FUMIGADORES -->
+    <section id="sub-personal" hidden>
+      <div class="bloque enlace-fum">
+        <div><b>Enlace para los fumigadores</b><br><span class="nota">Comp&#225;rtelo por WhatsApp. Cada uno entra con su usuario y PIN.</span></div>
+        <code id="enlaceFum"></code>
+        <button type="button" class="btn btn-claro btn-mini" id="btnCopiarEnlace">Copiar enlace</button>
+      </div>
+      <form id="formFum" class="bloque formulario" novalidate>
+        <div class="bloque-cab"><h2 id="tituloFum">Nuevo fumigador</h2></div>
+        <div class="rejilla">
+          <div class="doble"><label for="fNOMBRE">Nombres y apellidos</label><input id="fNOMBRE" required></div>
+          <div><label for="fUSUARIO">Usuario (ej. DNI)</label><input id="fUSUARIO" required></div>
+          <div><label for="fPIN">PIN (4 a 6 n&#250;meros)</label><input id="fPIN" inputmode="numeric" maxlength="6" placeholder="Nuevo PIN"></div>
+          <div><label for="fACTIVO">Estado</label><select id="fACTIVO"><option value="SI">Activo</option><option value="NO">Desactivado</option></select></div>
+        </div>
+        <p class="nota" id="notaPin"></p>
+        <p id="fumError" class="error" role="alert"></p>
+        <div class="botones">
+          <button type="button" class="btn btn-claro" id="btnFumCancelar">Limpiar</button>
+          <button type="submit" class="btn btn-primario" id="btnFumGuardar">Guardar fumigador</button>
+        </div>
+      </form>
+      <section class="bloque">
+        <div class="bloque-cab"><h2>Fumigadores registrados</h2></div>
+        <div class="tabla-envoltura"><table id="tablaFum"></table></div>
+      </section>
+    </section>
+  </main>
+
+  <!-- Detalle de planilla (casa por casa, imprimible) -->
+  <div id="modalPlanilla" class="modal" hidden>
+    <div class="modal-caja">
+      <div class="modal-cab no-imprimir">
+        <h2>Planilla del fumigador</h2>
+        <div><button class="btn btn-claro btn-mini" id="btnImprimirPlanilla">Imprimir</button>
+        <button class="btn btn-claro btn-mini" id="btnCerrarModal">Cerrar</button></div>
+      </div>
+      <div id="contenidoPlanilla"></div>
+    </div>
+  </div>
+
   <datalist id="lProvincia"></datalist><datalist id="lDistrito"></datalist>
   <datalist id="lUngets"></datalist><datalist id="lEess"></datalist>
 </div>
@@ -190,6 +284,8 @@
 <div id="aviso" class="aviso" role="status" hidden></div>
 <div id="cargando" class="cargando" hidden><span></span></div>
 
+<script src="config.js"></script>
 <script src="script.js"></script>
+<script src="fumigadores-jefe.js"></script>
 </body>
 </html>
