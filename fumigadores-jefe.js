@@ -76,7 +76,8 @@ function jfPintarRevisar() {
     var sinEmpezar = asign.filter(function (id) { return !plas.some(function (p) { return p.FUMIGADOR_ID === id; }); }).map(jfFumNombre);
     var filas = plas.map(function (p) {
       var x = jfSuma([p]);
-      return '<tr><td><b>' + esc(p.FUMIGADOR) + '</b>' + (p.FUMIGADOR_2 ? '<br><span class="nota">con ' + esc(p.FUMIGADOR_2) + '</span>' : '') + '</td>' +
+      var neb = p.NEBULIZADOR || p.FUMIGADOR_2;
+      return '<tr><td><span class="nota">Neb.</span> <b>' + esc(neb || '-') + '</b><br><span class="nota">Reg. ' + esc(p.FUMIGADOR) + '</span></td>' +
         '<td><span class="est-fum e-' + p.ESTADO + '">' + (JF_EST[p.ESTADO] || p.ESTADO) + '</span>' + (p.NOTA_JEFE && p.ESTADO === 'DEVUELTA' ? '<br><span class="nota">' + esc(p.NOTA_JEFE) + '</span>' : '') + '</td>' +
         '<td class="num">' + x.viv + '</td><td class="num">' + x.frio + '</td><td class="num">' + x.cal + '</td><td class="num">' + x.cer + '</td><td class="num">' + x.ren + '</td><td class="num">' + x.desh + '</td><td class="num">' + x.res + '</td>' +
         '<td>' + esc(p.INSECTICIDA || '-') + (p.CONCENTRACION ? ' ' + esc(p.CONCENTRACION) : '') + '</td>' +
@@ -95,7 +96,7 @@ function jfPintarRevisar() {
       (s.neb + s.cer + s.ren + s.desh > pro ? '<span class="mal">Las visitadas superan las programadas</span>' : '') +
       '</div>' +
       (sinEmpezar.length ? '<p class="nota">Sin planilla todav&#237;a: ' + sinEmpezar.map(esc).join(', ') + '</p>' : '') +
-      '<div class="tabla-envoltura"><table><thead><tr><th>Fumigador</th><th>Estado</th><th class="num">Viv.</th><th class="num">Fr&#237;o</th><th class="num">Caliente</th><th class="num">Cerr.</th><th class="num">Ren.</th><th class="num">Desh.</th><th class="num">Resid.</th><th>Insecticida</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
+      '<div class="tabla-envoltura"><table><thead><tr><th>Nebulizador / Registrador</th><th>Estado</th><th class="num">Viv.</th><th class="num">Fr&#237;o</th><th class="num">Caliente</th><th class="num">Cerr.</th><th class="num">Ren.</th><th class="num">Desh.</th><th class="num">Resid.</th><th>Insecticida</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
       '<p class="nota">Solo se suman las planillas <b>enviadas</b>. Las que est&#225;n en proceso o devueltas no entran hasta que el fumigador las env&#237;e.</p>' +
       '</section>';
   }).join('');
@@ -158,10 +159,10 @@ function jfFormatoHtml(p) {
     }).join('') +
     '</tbody><tfoot><tr><td colspan="4"><b>Total (' + s.viv + ' viviendas)</b></td><td class="num"><b>' + s.res + '</b></td><td class="marca"><b>' + s.frio + '</b></td><td class="marca"><b>' + s.cal + '</b></td><td class="marca"><b>' + s.cer + '</b></td><td class="marca"><b>' + s.ren + '</b></td><td class="marca"><b>' + s.desh + '</b></td><td></td></tr></tfoot></table></div>' +
     '<div class="formato-pie">' +
-    '<span><b>J. de brigada:</b> ' + esc(t.JEFE_BRIGADA || '-') + '</span><span><b>Fumigador 1:</b> ' + esc(p.FUMIGADOR) + '</span><span><b>Fumigador 2:</b> ' + esc(p.FUMIGADOR_2 || '-') + '</span>' +
+    '<span><b>J. de brigada:</b> ' + esc(t.JEFE_BRIGADA || '-') + '</span><span><b>Nebulizador:</b> ' + esc(p.NEBULIZADOR || p.FUMIGADOR_2 || '-') + '</span><span><b>Registrador:</b> ' + esc(p.FUMIGADOR) + '</span>' +
     '<span><b>Insecticida:</b> ' + esc(p.INSECTICIDA || '-') + '</span><span><b>Tipo:</b> ' + esc(p.TIPO_INSECTICIDA || '-') + '</span><span><b>Concentraci&#243;n final:</b> ' + esc(p.CONCENTRACION || '-') + '</span>' +
     '</div>' +
-    '<div class="firmas"><span>Firma J. de brigada</span><span>Firma fumigador 1</span><span>Firma fumigador 2</span></div>' +
+    '<div class="firmas"><span>Firma J. de brigada</span><span>Firma nebulizador</span><span>Firma registrador</span></div>' +
     '</div>';
 }
 function jfVerPlanilla(id) {

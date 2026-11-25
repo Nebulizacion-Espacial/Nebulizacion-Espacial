@@ -87,6 +87,7 @@ details.bloque[open] .rejilla{margin-top:12px}
 .rejilla label,.label-cond{display:block;font-size:13px;font-weight:700;color:var(--gris);margin-bottom:4px}
 .rejilla input{width:100%;padding:12px 11px;border:1px solid var(--borde);border-radius:8px;font-size:17px;background:#fff}
 .rejilla input:disabled{background:#f3f6f4;color:var(--gris)}
+.rejilla input.solo-lectura{background:#f3f6f4;color:var(--selva);font-weight:700;border-style:dashed}
 
 .nueva{border:2px solid var(--hoja)}
 .contador{display:flex;align-items:stretch;gap:8px}

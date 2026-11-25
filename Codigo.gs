@@ -278,7 +278,9 @@ var COLS_TAR = ['ID', 'FECHA', 'PROVINCIA', 'DISTRITO', 'UNGETS', 'ESTABLECIMIEN
   'MOTIVO']; // MOTIVO = "Control de" (control de brote, cerco...). Va al final para no mover columnas ya creadas.
 var COLS_PLA = ['ID', 'TAREA_ID', 'FUMIGADOR_ID', 'FUMIGADOR', 'FUMIGADOR_2', 'INSECTICIDA', 'TIPO_INSECTICIDA', 'CONCENTRACION',
   'ESTADO', 'NOTA_JEFE', 'TOTAL_VIV', 'NEB_FRIO', 'NEB_CALIENTE', 'CERRADAS', 'RENUENTES', 'DESHABITADAS', 'RESIDENTES',
-  'MANZANAS', 'VIVIENDAS_JSON', 'CREADO', 'ENVIADO', 'MODIFICADO'];
+  'MANZANAS', 'VIVIENDAS_JSON', 'CREADO', 'ENVIADO', 'MODIFICADO',
+  'NEBULIZADOR']; // NEBULIZADOR = quien maneja el equipo. El REGISTRADOR es FUMIGADOR (el usuario que anota en la app).
+// NEBULIZADOR va al final para no mover columnas ya creadas. Las planillas antiguas lo tienen en FUMIGADOR_2.
 var COLS_VIV = ['PLANILLA_ID', 'TAREA_ID', 'FECHA', 'FUMIGADOR', 'ZONA', 'VUELTA', 'ORDEN', 'SECTOR', 'MANZANA',
   'DIRECCION', 'RESIDENTES', 'CONDICION', 'HORA'];
 // Condición de cada vivienda (columnas del formato físico + renuente, que pide el consolidado)
@@ -416,6 +418,8 @@ function fumDatos(fum) {
     ok: true,
     fumigador: { ID: fum.ID, NOMBRE: fum.NOMBRE, USUARIO: fum.USUARIO },
     listas: leerListas(),
+    // nombres para sugerir el nebulizador (fumigadores activos)
+    nebulizadores: leerTabla(HOJA_FUM, COLS_FUM).filter(function (f) { return f.ACTIVO !== 'NO'; }).map(function (f) { return f.NOMBRE; }).sort(),
     tareas: visibles,
     planillas: planillas.filter(function (pl) { return ids[pl.TAREA_ID]; }).map(function (pl) {
       var o = sinFila(pl); o.VIVIENDAS = JSON.parse(pl.VIVIENDAS_JSON || '[]'); delete o.VIVIENDAS_JSON; return o;
@@ -466,8 +470,9 @@ function fumGuardar(fum, pl, enviar) {
 
   var o = previa || { ID: txtF(pl.ID, 40) || idF('P'), TAREA_ID: tarea.ID, FUMIGADOR_ID: fum.ID, CREADO: ahora() };
   if (!/^[A-Za-z0-9-]+$/.test(o.ID)) o.ID = idF('P');
-  o.FUMIGADOR = fum.NOMBRE;
-  o.FUMIGADOR_2 = txtF(pl.FUMIGADOR_2, 80).toUpperCase();
+  o.FUMIGADOR = fum.NOMBRE; // REGISTRADOR: siempre el usuario que ingresó
+  o.NEBULIZADOR = txtF(pl.NEBULIZADOR || pl.FUMIGADOR_2, 80).toUpperCase();
+  if (enviar && !o.NEBULIZADOR) return { ok: false, error: 'Falta el nombre del nebulizador (quien manej\u00f3 el equipo).' };
   o.INSECTICIDA = txtF(pl.INSECTICIDA, 60).toUpperCase();
   o.TIPO_INSECTICIDA = txtF(pl.TIPO_INSECTICIDA, 30).toUpperCase();
   o.CONCENTRACION = txtF(pl.CONCENTRACION, 30);
@@ -606,7 +611,8 @@ function jfAprobar(id, forzar) {
     if (r.NEB_FRIO) s.FRIO++;          // equipos portátiles usados en frío (uno por planilla)
     if (r.NEB_CALIENTE) s.CAL++;       // equipos portátiles usados en caliente
     vv.forEach(function (v) { if (/^NEB_/.test(v.CONDICION) && v.MANZANA) mz[(v.SECTOR || '') + '|' + v.MANZANA] = 1; });
-    nombres.push(pl.FUMIGADOR + (pl.FUMIGADOR_2 ? ' y ' + pl.FUMIGADOR_2 : ''));
+    var neb = pl.NEBULIZADOR || pl.FUMIGADOR_2;
+    nombres.push((neb ? 'Neb. ' + neb + ' / ' : '') + 'Reg. ' + pl.FUMIGADOR);
   });
 
   var cfg = leerConfig(), pro = Number(t.VIV_PRO) || 0;

@@ -85,7 +85,8 @@
     <details class="bloque" id="bloqueDatos">
       <summary>Equipo e insecticida <small id="resumenDatos"></small></summary>
       <div class="rejilla">
-        <div class="ancho"><label for="pFum2">Fumigador 2 (compa&#241;ero, opcional)</label><input id="pFum2" autocapitalize="characters"></div>
+        <div class="ancho"><label for="pNebulizador">Nebulizador (quien maneja el equipo) *</label><input id="pNebulizador" list="listaNebulizadores" autocapitalize="characters" placeholder="Elige o escribe el nombre"><datalist id="listaNebulizadores"></datalist></div>
+        <div class="ancho"><label for="pRegistrador">Registrador (t&#250;, quien anota)</label><input id="pRegistrador" readonly tabindex="-1" class="solo-lectura"></div>
         <div class="ancho"><label for="pInsecticida">Nombre del insecticida</label><select id="pInsecticida"></select></div>
         <div><label for="pTipo">Tipo</label><input id="pTipo" autocapitalize="characters" placeholder="Ej. CE, EW"></div>
         <div><label for="pConc">Concentraci&#243;n final</label><input id="pConc" placeholder="Ej. 2%"></div>

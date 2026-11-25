@@ -12,7 +12,7 @@ var COND = {
 };
 var ESTADOS_TXT = { BORRADOR: 'En proceso', ENVIADA: 'Enviada al jefe', APROBADA: 'Aprobada', DEVUELTA: 'Devuelta para corregir' };
 
-var F = { listas: { insecticidas: ['MALATHION 57 EC'], motivos: [] }, claveActual: null, token: null, fum: null, tareas: [], planillas: {}, actual: null, editIdx: null, necesitaLogin: false, sinRed: false };
+var F = { listas: { insecticidas: ['MALATHION 57 EC'], motivos: [] }, nebulizadores: [], claveActual: null, token: null, fum: null, tareas: [], planillas: {}, actual: null, editIdx: null, necesitaLogin: false, sinRed: false };
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -48,7 +48,7 @@ async function api(accion, datos) {
 var K_SES = 'fum_sesion';
 function kDatos() { return 'fum_datos_' + (F.fum ? F.fum.ID : 'x'); }
 function guardarLocal() {
-  try { localStorage.setItem(kDatos(), JSON.stringify({ tareas: F.tareas, planillas: F.planillas, listas: F.listas, fecha: new Date().toISOString() })); } catch (e) { avisar('El celular no tiene espacio para guardar.', true); }
+  try { localStorage.setItem(kDatos(), JSON.stringify({ tareas: F.tareas, planillas: F.planillas, listas: F.listas, nebulizadores: F.nebulizadores, fecha: new Date().toISOString() })); } catch (e) { avisar('El celular no tiene espacio para guardar.', true); }
 }
 function leerLocal() { try { return JSON.parse(localStorage.getItem(kDatos())) || null; } catch (e) { return null; } }
 async function hashTxt(t) {
@@ -122,7 +122,7 @@ function salir() {
 
 async function iniciar() {
   var loc = leerLocal();
-  if (loc) { F.tareas = loc.tareas || []; F.planillas = loc.planillas || {}; if (loc.listas) F.listas = loc.listas; }
+  if (loc) { F.tareas = loc.tareas || []; F.planillas = loc.planillas || {}; if (loc.listas) F.listas = loc.listas; F.nebulizadores = loc.nebulizadores || []; }
   $('vLogin').hidden = true; $('app').hidden = false;
   $('nombreFum').textContent = F.fum.NOMBRE;
   mostrarTareas();
@@ -138,6 +138,7 @@ async function refrescar(silencioso) {
     F.sinRed = false;
     F.tareas = j.tareas || [];
     if (j.listas) F.listas = j.listas;
+    if (j.nebulizadores) F.nebulizadores = j.nebulizadores;
     var nuevas = {};
     (j.planillas || []).forEach(function (p) { nuevas[p.ID] = p; });
     Object.keys(F.planillas).forEach(function (id) { var p = F.planillas[id]; if (p._sucio) nuevas[id] = p; });
@@ -244,7 +245,7 @@ function asegurarPlanilla() {
   var ult = {}; try { ult = JSON.parse(localStorage.getItem('fum_ultimo_equipo')) || {}; } catch (e) {}
   var v0 = asegurarPlanillaVista();
   p = { ID: 'P' + Date.now() + Math.floor(Math.random() * 900 + 100), TAREA_ID: F.actual, ESTADO: 'BORRADOR', VIVIENDAS: [],
-    FUMIGADOR: F.fum.NOMBRE, FUMIGADOR_2: v0.FUMIGADOR_2, INSECTICIDA: v0.INSECTICIDA, TIPO_INSECTICIDA: v0.TIPO_INSECTICIDA, CONCENTRACION: v0.CONCENTRACION };
+    FUMIGADOR: F.fum.NOMBRE, REGISTRADOR: F.fum.NOMBRE, NEBULIZADOR: v0.NEBULIZADOR, INSECTICIDA: v0.INSECTICIDA, TIPO_INSECTICIDA: v0.TIPO_INSECTICIDA, CONCENTRACION: v0.CONCENTRACION };
   F.planillas[p.ID] = p;
   return p;
 }
@@ -290,6 +291,8 @@ function abrirTarea(id, refresco) {
     '<div><dt>Establecimiento</dt><dd>' + esc(t.ESTABLECIMIENTO) + '</dd></div>' +
     (t.MICRORED ? '<div><dt>Microred</dt><dd>' + esc(t.MICRORED) + '</dd></div>' : '') +
     (t.JEFE_BRIGADA ? '<div><dt>J. de brigada</dt><dd>' + esc(t.JEFE_BRIGADA) + '</dd></div>' : '') +
+    '<div><dt>Nebulizador</dt><dd id="cabNebulizador">' + esc(nebulizadorDe(planillaDe(id)) || '— falta —') + '</dd></div>' +
+    '<div><dt>Registrador</dt><dd>' + esc((planillaDe(id) || {}).FUMIGADOR || F.fum.NOMBRE) + '</dd></div>' +
     '</dl>' + (t.OBSERVACIONES ? '<p class="cab-obs">📝 ' + esc(t.OBSERVACIONES) + '</p>' : '');
 
   $('avisoDevuelta').hidden = !(p && p.ESTADO === 'DEVUELTA');
@@ -302,11 +305,13 @@ function abrirTarea(id, refresco) {
 
   // datos del equipo
   var d = p || asegurarPlanillaVista();
-  $('pFum2').value = d.FUMIGADOR_2 || ''; llenarInsecticidas(d.INSECTICIDA);
+  $('pNebulizador').value = nebulizadorDe(d); llenarNebulizadores();
+  $('pRegistrador').value = (p && p.FUMIGADOR) || F.fum.NOMBRE;
+  llenarInsecticidas(d.INSECTICIDA);
   $('pTipo').value = d.TIPO_INSECTICIDA || ''; $('pConc').value = d.CONCENTRACION || '';
-  ['pFum2', 'pInsecticida', 'pTipo', 'pConc'].forEach(function (k) { $(k).disabled = !ed; });
-  $('resumenDatos').textContent = d.INSECTICIDA ? '· ' + d.INSECTICIDA + (d.CONCENTRACION ? ' ' + d.CONCENTRACION : '') : '· sin completar';
-  if (!d.INSECTICIDA && ed) $('bloqueDatos').open = true;
+  ['pNebulizador', 'pInsecticida', 'pTipo', 'pConc'].forEach(function (k) { $(k).disabled = !ed; });
+  pintarResumenDatos(d);
+  if ((!d.INSECTICIDA || !nebulizadorDe(d)) && ed) $('bloqueDatos').open = true;
 
   $('bloqueNueva').hidden = !ed;
   $('btnEnviar').hidden = !ed; $('btnGuardarAvance').hidden = !ed;
@@ -318,7 +323,21 @@ function abrirTarea(id, refresco) {
 function asegurarPlanillaVista() {
   var ult = {}; try { ult = JSON.parse(localStorage.getItem('fum_ultimo_equipo')) || {}; } catch (e) {}
   var ins = ult.INSECTICIDA || F.listas.insecticidas[0] || '';
-  return { FUMIGADOR_2: ult.FUMIGADOR_2 || '', INSECTICIDA: ins, TIPO_INSECTICIDA: ult.TIPO_INSECTICIDA || tipoDe(ins), CONCENTRACION: ult.CONCENTRACION || '' };
+  return { NEBULIZADOR: ult.NEBULIZADOR || '', INSECTICIDA: ins, TIPO_INSECTICIDA: ult.TIPO_INSECTICIDA || tipoDe(ins), CONCENTRACION: ult.CONCENTRACION || '' };
+}
+/* Nebulizador: el que maneja el equipo. Las planillas antiguas lo tenían en FUMIGADOR_2 */
+function nebulizadorDe(p) { return p ? (p.NEBULIZADOR || p.FUMIGADOR_2 || '') : ''; }
+function llenarNebulizadores() {
+  var yo = F.fum ? F.fum.NOMBRE : '';
+  $('listaNebulizadores').innerHTML = (F.nebulizadores || []).filter(function (n) { return n !== yo; })
+    .map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+}
+function pintarResumenDatos(d) {
+  var neb = nebulizadorDe(d), partes = [];
+  partes.push(neb ? 'Neb.: ' + neb : 'falta nebulizador');
+  partes.push(d.INSECTICIDA ? d.INSECTICIDA + (d.CONCENTRACION ? ' ' + d.CONCENTRACION : '') : 'falta insecticida');
+  $('resumenDatos').textContent = '· ' + partes.join(' · ');
+  var c = $('cabNebulizador'); if (c) c.textContent = neb || '— falta —';
 }
 function tipoDe(nombre) { var m = /\b(EC|EW|SC|UL|ULV|CS|WP|SL)$/i.exec(String(nombre || '').trim()); return m ? m[1].toUpperCase() : ''; }
 function llenarInsecticidas(actual) {
@@ -333,14 +352,15 @@ function guardarDatosEquipo() {
   var t = tareaActual(), p0 = planillaDe(F.actual);
   if (!editable(t, p0)) return;
   var p = asegurarPlanilla();
-  p.FUMIGADOR_2 = $('pFum2').value.trim().toUpperCase();
+  p.NEBULIZADOR = $('pNebulizador').value.trim().replace(/\s+/g, ' ').toUpperCase();
+  p.REGISTRADOR = F.fum.NOMBRE;
   var insPrev = p.INSECTICIDA;
   p.INSECTICIDA = $('pInsecticida').value.trim().toUpperCase();
   if (p.INSECTICIDA !== insPrev && tipoDe(p.INSECTICIDA)) $('pTipo').value = tipoDe(p.INSECTICIDA);
   p.TIPO_INSECTICIDA = $('pTipo').value.trim().toUpperCase();
   p.CONCENTRACION = $('pConc').value.trim();
-  try { localStorage.setItem('fum_ultimo_equipo', JSON.stringify({ FUMIGADOR_2: p.FUMIGADOR_2, INSECTICIDA: p.INSECTICIDA, TIPO_INSECTICIDA: p.TIPO_INSECTICIDA, CONCENTRACION: p.CONCENTRACION })); } catch (e) {}
-  $('resumenDatos').textContent = p.INSECTICIDA ? '· ' + p.INSECTICIDA + (p.CONCENTRACION ? ' ' + p.CONCENTRACION : '') : '· sin completar';
+  try { localStorage.setItem('fum_ultimo_equipo', JSON.stringify({ NEBULIZADOR: p.NEBULIZADOR, INSECTICIDA: p.INSECTICIDA, TIPO_INSECTICIDA: p.TIPO_INSECTICIDA, CONCENTRACION: p.CONCENTRACION })); } catch (e) {}
+  pintarResumenDatos(p);
   marcarCambio(p);
 }
 
@@ -439,9 +459,10 @@ function borrarVivienda(i) {
 function enviarPlanilla() {
   var p = planillaDe(F.actual), t = tareaActual();
   if (!p || !(p.VIVIENDAS || []).length) { avisar('Registra al menos una vivienda antes de enviar.', true); return; }
+  if (!nebulizadorDe(p)) { $('bloqueDatos').open = true; avisar('Escribe quién fue el nebulizador (el que manejó el equipo).', true); $('pNebulizador').focus(); return; }
   if (!p.INSECTICIDA) { $('bloqueDatos').open = true; avisar('Completa el nombre del insecticida.', true); $('pInsecticida').focus(); return; }
   var vv = p.VIVIENDAS, neb = vv.filter(function (v) { return /^NEB_/.test(v.CONDICION); }).length;
-  if (!confirm('¿Terminar y enviar tu planilla al jefe?\n\n' + t.ZONA + ' · Vuelta ' + t.VUELTA + '\nViviendas: ' + vv.length + ' (nebulizadas ' + neb + ')\n\nDespués ya no podrás modificarla, salvo que el jefe te la devuelva.')) return;
+  if (!confirm('¿Terminar y enviar tu planilla al jefe?\n\n' + t.ZONA + ' · Vuelta ' + t.VUELTA + '\nNebulizador: ' + nebulizadorDe(p) + '\nRegistrador: ' + p.FUMIGADOR + '\nViviendas: ' + vv.length + ' (nebulizadas ' + neb + ')\n\nDespués ya no podrás modificarla, salvo que el jefe te la devuelva.')) return;
   p._estadoPrevio = p.ESTADO; p.ESTADO = 'ENVIADA'; p._enviar = true;
   marcarCambio(p); clearTimeout(tSync);
   abrirTarea(F.actual, true);
@@ -470,7 +491,7 @@ document.addEventListener('DOMContentLoaded', function () {
   $('btnCancelarEdicion').addEventListener('click', function () { F.editIdx = null; borrarBorrador(); prepararNueva(); pintarViviendas(); });
   ['vSector', 'vManzana', 'vDireccion', 'vResidentes'].forEach(function (k) { $(k).addEventListener('input', guardarBorrador); });
   document.querySelector('.contador').addEventListener('click', function () { setTimeout(guardarBorrador, 0); });
-  ['pFum2', 'pTipo', 'pConc'].forEach(function (k) { $(k).addEventListener('input', function () { clearTimeout(tEquipo); tEquipo = setTimeout(guardarDatosEquipo, 800); }); });
+  ['pNebulizador', 'pTipo', 'pConc'].forEach(function (k) { $(k).addEventListener('input', function () { clearTimeout(tEquipo); tEquipo = setTimeout(guardarDatosEquipo, 800); }); });
   $('btnGuardarAvance').addEventListener('click', guardarAvance);
   // Si se cierra la app o se bloquea el celular, se guarda todo al instante
   document.addEventListener('visibilitychange', function () { if (document.hidden && F.fum) { guardarBorrador(); guardarLocal(); } });
@@ -479,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('.ver-clave').forEach(function (b) {
     b.addEventListener('click', function () { var i = $(b.dataset.ver); i.type = i.type === 'password' ? 'text' : 'password'; });
   });
-  ['pFum2', 'pInsecticida', 'pTipo', 'pConc'].forEach(function (k) { $(k).addEventListener('change', guardarDatosEquipo); });
+  ['pNebulizador', 'pInsecticida', 'pTipo', 'pConc'].forEach(function (k) { $(k).addEventListener('change', guardarDatosEquipo); });
   $('btnEnviar').addEventListener('click', enviarPlanilla);
 
   window.addEventListener('online', function () { F.sinRed = false; pintarSync(); refrescar(true); });
